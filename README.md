@@ -107,7 +107,7 @@ class StubDataClass(Kobject):
     a_bool: bool = None
 ```
 
-### Custom excepton
+### Custom exception
 
 By default Kobject raise a ```TypeError``` but you can override this exception using ```set_custom_exception```
 
