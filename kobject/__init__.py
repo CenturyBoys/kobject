@@ -3,7 +3,7 @@ Know your object a __init__ type validator
 """
 
 import inspect
-from typing import Union, Optional, Coroutine, Callable, Dict
+from typing import Union, Optional, Coroutine, Callable, Dict, Type
 
 
 class Kobject:
@@ -12,6 +12,15 @@ class Kobject:
     Will rise a TypeError exception with all validation errors
     Obs: dict values are not allowed
     """
+
+    __custom_exception: Type[Exception] = None
+
+    @classmethod
+    def set_custom_exception(cls, exception: Type[Exception]):
+        """
+        Will change de default validation error (TypeError)
+        """
+        cls.__custom_exception = exception
 
     def __get_attribute_metadata(self) -> dict:
         _default_values = dict(inspect.signature(self.__init__).parameters.items())
@@ -64,7 +73,10 @@ class Kobject:
         need_raise_error = bool(_errors)
         if need_raise_error:
             message = self.__format_errors(_errors=_errors)
-            raise TypeError(message)
+            exception = self.__custom_exception
+            if self.__custom_exception is None:
+                exception = TypeError
+            raise exception(message)
 
     @staticmethod
     def __format_errors(_errors: dict) -> str:

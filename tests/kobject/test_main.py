@@ -500,3 +500,44 @@ def test_default_value_attr_error(default_attr):
 def test_default_value_attr(default_attr):
     instance = default_attr()
     assert instance.a_bool == 2
+
+
+@pytest.fixture(
+    params=[
+        ClassType.DATACLASS,
+        ClassType.DEFAULT,
+    ]
+)
+def custom_exception(request):
+    Kobject.set_custom_exception(None)
+    if request.param == ClassType.DATACLASS:
+
+        @dataclass
+        class StubDataClass(Kobject):
+            a_bool: bool
+
+        return StubDataClass
+    elif request.param == ClassType.DEFAULT:
+
+        class StubClass(Kobject):
+            a_bool: bool
+
+            def __init__(self, a_bool: bool):
+                self.a_bool = a_bool
+                self.__post_init__()
+
+        return StubClass
+
+
+def test_custom_exception(custom_exception):
+    class CustomException(Exception):
+        pass
+
+    with pytest.raises(TypeError) as t_error:
+        custom_exception(a_bool="")
+    Kobject.set_custom_exception(CustomException)
+    with pytest.raises(CustomException) as c_error:
+        custom_exception(a_bool="")
+    error_message = "Validation Errors:\n    'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'str'>\n"
+    assert t_error.value.args[0] == error_message
+    assert c_error.value.args[0] == error_message
