@@ -71,7 +71,8 @@ class StubClass(Kobject):
     a_tuple_bool: Tuple[bool]
 
 instance = StubClass(a_list_int=[1, "", 2, ""], a_tuple_bool=["", True])
-
+```
+```bash
 Traceback (most recent call last):
   File "/snap/pycharm-community/312/plugins/python-ce/helpers/pydev/pydevconsole.py", line 364, in runcode
     coro = func()
@@ -104,4 +105,37 @@ class StubClass(Kobject):
 @dataclass
 class StubDataClass(Kobject):
     a_bool: bool = None
+```
+
+### Custom excepton
+
+By default Kobject raise a ```TypeError``` but you can override this exception using ```set_custom_exception```
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+
+class CustomException(Exception):
+    pass
+
+
+Kobject.set_custom_exception(CustomException)
+
+
+@dataclass
+class StubClass(Kobject):
+    a__int: int
+
+instance = StubClass(a__int="")
+```
+```bash
+Traceback (most recent call last):
+  File "/snap/pycharm-community/312/plugins/python-ce/helpers/pydev/pydevconsole.py", line 364, in runcode
+    coro = func()
+  File "<input>", line 15, in <module>
+  File "<string>", line 4, in __init__
+  File "/home/marco/projects/kobject/kobject/__init__.py", line 79, in __post_init__
+    raise exception(message)
+__main__.CustomException: Validation Errors:
+    'a__int' : Wrong type! Expected <class 'int'> but giving <class 'str'>
 ```
