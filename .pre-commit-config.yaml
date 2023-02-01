@@ -15,7 +15,6 @@ repos:
         [
           "--ignore-paths",
           "tests/",
-          "--disable=R0903",
           "-rn", # Only display messages
           "-sn", # Don't display the score
         ]
