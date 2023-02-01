@@ -87,8 +87,8 @@ def test_simple_attr_error(simple_attr):
         "    'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'int'>\n"
         "    'a_str' : Wrong type! Expected <class 'str'> but giving <class 'float'>\n"
         "    'a_float' : Wrong type! Expected <class 'float'> but giving <class 'bool'>\n"
-        "    'a_object' : Wrong type! Expected <class 'tests.kobject.test_main.StubInstance'> "
-        "but giving <class 'tests.kobject.test_main.test_simple_attr_error.<locals>.E'>\n",
+        "    'a_object' : Wrong type! Expected <class 'tests.kobject.validator.test_main.StubInstance'> "
+        "but giving <class 'tests.kobject.validator.test_main.test_simple_attr_error.<locals>.E'>\n",
     )
 
 
@@ -158,8 +158,8 @@ def test_attr_with_content_error(attr_with_content):
         "Validation Errors:\n"
         "    'a_list_int' : Wrong type! Expected (<class 'int'>,) but giving <class 'str'> on index 2\n"
         "    'a_list_int' : Wrong type! Expected (<class 'int'>,) but giving <class 'str'> on index 4\n"
-        "    'a_tuple_object' : Wrong type! Expected (<class 'tests.kobject.test_main.StubInstance'>,)"
-        " but giving <class 'tests.kobject.test_main.test_attr_with_content_error.<locals>.E'> on index 0\n",
+        "    'a_tuple_object' : Wrong type! Expected (<class 'tests.kobject.validator.test_main.StubInstance'>,)"
+        " but giving <class 'tests.kobject.validator.test_main.test_attr_with_content_error.<locals>.E'> on index 0\n",
     )
 
 
