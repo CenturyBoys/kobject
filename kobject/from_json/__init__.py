@@ -33,7 +33,7 @@ class FromJSON:
         resolver_callback: lambda function that receives the type and value to be cast.
          Example 'lambda attr_type, value: value'
         """
-        JSONDecoder.types_resolver.update({attr_type: resolver_callback})
+        JSONDecoder.types_resolver.insert(0, (attr_type, resolver_callback))
 
     @classmethod
     def from_json(cls: T, payload: bytes) -> typing.Type[T]:
@@ -90,13 +90,7 @@ class JSONDecoder:
     Implementation tyo decode json in to class instance inspired by json.JSONEncoder
     """
 
-    types_resolver = {
-        int: lambda attr_type, value: value,
-        str: lambda attr_type, value: value,
-        bool: lambda attr_type, value: value,
-        float: lambda attr_type, value: value,
-        FromJSON: lambda attr_type, value: attr_type.from_dict(value),
-    }
+    types_resolver = []
 
     @staticmethod
     def get_type(attr_type):
@@ -112,7 +106,16 @@ class JSONDecoder:
         """
         Returns the result of cast attribute type for the attribute type
         """
-        for map_attr_type, resolver in cls.types_resolver.items():
+        for map_attr_type, resolver in cls.types_resolver:
             if inspect.isclass(attr_type) and issubclass(attr_type, map_attr_type):
                 return resolver(attr_type, attr_value)
         return None
+
+
+FromJSON.set_decoder_resolver(bool, lambda attr_type, value: value)
+FromJSON.set_decoder_resolver(float, lambda attr_type, value: value)
+FromJSON.set_decoder_resolver(int, lambda attr_type, value: value)
+FromJSON.set_decoder_resolver(str, lambda attr_type, value: value)
+FromJSON.set_decoder_resolver(
+    FromJSON, lambda attr_type, value: attr_type.from_dict(value)
+)
