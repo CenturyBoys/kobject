@@ -29,6 +29,7 @@ class BaseC(Kobject, FromJSON, ToJSON):
     a_base_a: BaseA
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
+    a_int_default_none: int = None
 
 
 def test_from_json_error_default_exception():
@@ -65,7 +66,8 @@ def test_from_json():
         b'"a_tuple_of_bool": [true],"a_base_a": {"a_date'
         b'time": "2023-02-01 17:38:45.389426"},"a_base_b": {"a_'
         b'uuid":"1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_lis'
-        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}]}'
+        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}],'
+        b' "a_int_default_none": null}'
     )
     instance = BaseC.from_json(payload=payload)
     assert isinstance(instance, BaseC)
