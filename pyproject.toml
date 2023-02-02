@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kobject"
-version = "0.3.1"
+version = "0.3.2"
 description = "Know your object is a attribute type checker"
 authors = ["Marco Sievers de Almeida Ximit Gaia <im.ximit@gmail.com>"]
 license = "Apache License 2.0"
