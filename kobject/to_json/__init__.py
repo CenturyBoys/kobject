@@ -1,7 +1,7 @@
 """
 Package to helper to encode class in json
 """
-
+import inspect
 import json
 import typing
 
@@ -33,8 +33,16 @@ class ToJSON:
         if "_FromJSON__custom_exception" in _annotations:
             del _annotations["_FromJSON__custom_exception"]
 
-        for attr in _annotations:
+        for attr, attr_type in _annotations.items():
             attr_value = object.__getattribute__(self, attr)
+            if not isinstance(attr_value, (list, tuple)):
+                _dict_representation.update({attr: JSONEncoder.default(attr_value)})
+                continue
+            attr_value_new = []
+            for attr_value_item in attr_value:
+                attr_value_new.append(JSONEncoder.default(attr_value_item))
+            attr_type = JSONEncoder.get_type(attr_type=attr_type)
+            attr_value = attr_type(attr_value_new)
             _dict_representation.update({attr: attr_value})
         return _dict_representation
 
@@ -53,6 +61,14 @@ class JSONEncoder(json.JSONEncoder):
     """
 
     base_types_resolver = {}
+
+    @staticmethod
+    def get_type(attr_type):
+        """
+        Returns the type or subtypes of giving attribute type
+        """
+        attr_type = attr_type.__origin__
+        return attr_type
 
     @classmethod
     def default(cls, obj):  # pylint: disable=W0221
