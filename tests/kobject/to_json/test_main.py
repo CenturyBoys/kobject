@@ -27,6 +27,32 @@ class BaseC(Kobject, ToJSON, FromJSON):
     a_list_of_base_a: List[BaseA]
 
 
+def test_to_dict():
+    ToJSON.set_encoder_resolver(datetime, lambda value: str(value))
+    ToJSON.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
+    instance = BaseC(
+        a_int=1,
+        a_str="lala",
+        a_list_of_int=[1, 2, 3],
+        a_tuple_of_bool=(True,),
+        a_base_a=BaseA(a_datetime=datetime.fromisoformat("2023-02-01 17:38:45.389426")),
+        a_base_b=BaseB(a_uuid=UUID("1d9cf695-c917-49ce-854b-4063f0cda2e7")),
+        a_list_of_base_a=[
+            BaseA(a_datetime=datetime.fromisoformat("2023-02-01 17:38:45.389426"))
+        ],
+    )
+    dict_representation = instance.dict()
+    assert dict_representation == {
+        "a_int": 1,
+        "a_str": "lala",
+        "a_list_of_int": [1, 2, 3],
+        "a_tuple_of_bool": (True,),
+        "a_base_a": {"a_datetime": "2023-02-01 17:38:45.389426"},
+        "a_base_b": {"a_uuid": "1d9cf695-c917-49ce-854b-4063f0cda2e7"},
+        "a_list_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}],
+    }
+
+
 def test_from_json():
     ToJSON.set_encoder_resolver(datetime, lambda value: str(value))
     ToJSON.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
