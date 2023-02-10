@@ -52,12 +52,6 @@ class FromJSON:
         return instance
 
     @classmethod
-    def __attribute_has_default_value(cls, attr: str, attr_value: any) -> bool:
-        _default_values = inspect.signature(cls.__init__).parameters
-        default_value = _default_values.get(attr).default
-        return attr_value == default_value
-
-    @classmethod
     def from_dict(cls: T, dict_repr: dict) -> typing.Type[T]:
         """
         Returns a class instance by the giving dict representation
@@ -73,10 +67,8 @@ class FromJSON:
             casted_value = JSONDecoder.type_caster(
                 attr_type=attr_type, attr_value=attr_value
             )
-            is_default_value = cls.__attribute_has_default_value(
-                attr=attr, attr_value=attr_value
-            )
-            if casted_value is not None or is_default_value:
+            is_a_iterable = isinstance(attr_value, (list, tuple))
+            if not is_a_iterable:
                 dict_repr[attr] = casted_value
                 continue
 

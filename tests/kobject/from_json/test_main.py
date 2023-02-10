@@ -74,3 +74,20 @@ def test_from_json():
     assert isinstance(instance.a_base_a, BaseA)
     assert isinstance(instance.a_base_b, BaseB)
     assert isinstance(instance.a_list_of_base_a[0], BaseA)
+
+
+def test_from_json_empty_payload():
+    FromJSON.set_custom_exception(Exception)
+    with pytest.raises(TypeError) as error:
+        BaseC.from_json(payload=b"{}")
+    assert error.value.args == (
+        "Validation Errors:\n    'a_int' : Wrong type! Expected <class 'int'> but giving <class 'NoneType'>\n"
+        "    'a_str' : Wrong type! Expected <class 'str'> but giving <class 'NoneType'>\n"
+        "    'a_list_of_int' : Wrong type! Expected <class 'list'> but giving <class 'NoneType'>\n"
+        "    'a_tuple_of_bool' : Wrong type! Expected <class 'tuple'> but giving <class 'NoneType'>\n"
+        "    'a_base_a' : Wrong type! Expected <class 'tests.kobject.from_json.test_main.BaseA'> but "
+        "giving <class 'NoneType'>\n    'a_base_b' : Wrong type! Expected <class 'tests.kobject.from_"
+        "json.test_main.BaseB'> but giving <class 'NoneType'>\n    'a_list_of_base_a' : Wrong type! Ex"
+        "pected <class 'list'> but giving <class 'NoneType'>\n",
+    )
+    FromJSON.set_custom_exception(None)
