@@ -5,7 +5,7 @@ Package to  helper to decode json in a class instance
 import inspect
 import json
 import typing
-
+from enum import Enum
 
 T = typing.TypeVar("T")
 
@@ -51,6 +51,14 @@ class FromJSON:
         instance = cls.from_dict(dict_repr=dict_repr)
         return instance
 
+    @staticmethod
+    def attribute_has_default_value(attr: str, attr_metadata: dict) -> bool:
+        """
+        Validate that the attribute has default values
+        """
+        default_value = attr_metadata.get(attr).default
+        return default_value != inspect._empty  # pylint: disable=W0212
+
     @classmethod
     def from_dict(cls: T, dict_repr: dict) -> typing.Type[T]:
         """
@@ -58,18 +66,25 @@ class FromJSON:
         """
 
         _annotations = typing.get_type_hints(cls)
+        _annotations_meta = dict(inspect.signature(cls.__init__).parameters.items())
+        _missing = []
 
         del _annotations["_Kobject__custom_exception"]
         del _annotations["_FromJSON__custom_exception"]
 
         for attr, attr_type in _annotations.items():
+            has_default_value = cls.attribute_has_default_value(attr, _annotations_meta)
+            attr_not_present = attr not in dict_repr
+            if attr_not_present and has_default_value:
+                continue
+            if attr_not_present and not has_default_value:
+                _missing.append(attr)
             attr_value = dict_repr.get(attr)
-            casted_value = JSONDecoder.type_caster(
-                attr_type=attr_type, attr_value=attr_value
-            )
             is_a_iterable = isinstance(attr_value, (list, tuple))
             if not is_a_iterable:
-                dict_repr[attr] = casted_value
+                dict_repr[attr] = JSONDecoder.type_caster(
+                    attr_type=attr_type, attr_value=attr_value
+                )
                 continue
 
             attr_type, sub_type = JSONDecoder.get_type(attr_type=attr_type)
@@ -82,8 +97,12 @@ class FromJSON:
                     )
                 )
             dict_repr[attr] = attr_type(attr_value_new)
-        instance = cls(**dict_repr)
-        return instance
+        if _missing:
+            message = f"Missing content -> The fallow attr are not presente {', '.join(_missing)}"
+            if cls.__custom_exception:
+                raise cls.__custom_exception(message)  # pylint: disable=E1102
+            raise TypeError(message)
+        return cls(**dict_repr)
 
 
 class JSONDecoder:
@@ -103,18 +122,17 @@ class JSONDecoder:
         return attr_type, sub_type
 
     @classmethod
-    def type_caster(cls, attr_type, attr_value):
+    def type_caster(cls, attr_type, attr_value):  # pylint: disable=R1710
         """
         Returns the result of cast attribute type for the attribute type
         """
         for map_attr_type, resolver in cls.types_resolver:
             if inspect.isclass(attr_type) and issubclass(attr_type, map_attr_type):
                 return resolver(attr_type, attr_value)
-        return None
 
 
 FromJSON.set_decoder_resolver(bool, lambda attr_type, value: value)
-FromJSON.set_decoder_resolver(float, lambda attr_type, value: value)
+FromJSON.set_decoder_resolver(float, lambda attr_type, value: float(value))
 FromJSON.set_decoder_resolver(int, lambda attr_type, value: value)
 FromJSON.set_decoder_resolver(str, lambda attr_type, value: value)
 FromJSON.set_decoder_resolver(
@@ -123,3 +141,4 @@ FromJSON.set_decoder_resolver(
     if isinstance(value, dict)
     else value,
 )
+FromJSON.set_decoder_resolver(Enum, lambda attr_type, value: attr_type(value))
