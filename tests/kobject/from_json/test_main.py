@@ -1,5 +1,5 @@
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from json import JSONDecodeError
 from typing import List, Tuple
 from uuid import UUID
@@ -30,6 +30,7 @@ class BaseC(Kobject, FromJSON, ToJSON):
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
     a_int_default_none: int = None
+    a_list_field: list = field(default_factory=list)
 
 
 def test_from_json_error_default_exception():
@@ -76,18 +77,27 @@ def test_from_json():
     assert isinstance(instance.a_list_of_base_a[0], BaseA)
 
 
+def test_from_json_empty_payload_custom_exception():
+    class MyException(Exception):
+        pass
+
+    FromJSON.set_custom_exception(MyException)
+    with pytest.raises(MyException) as error:
+        BaseC.from_json(payload=b"{}")
+    assert error.value.args == (
+        "Missing content -> The fallow attr are not presente a_int, a_str"
+        ", a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_"
+        "base_a",
+    )
+    FromJSON.set_custom_exception(None)
+
+
 def test_from_json_empty_payload():
-    FromJSON.set_custom_exception(Exception)
+    FromJSON.set_custom_exception(None)
     with pytest.raises(TypeError) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
-        "Validation Errors:\n    'a_int' : Wrong type! Expected <class 'int'> but giving <class 'NoneType'>\n"
-        "    'a_str' : Wrong type! Expected <class 'str'> but giving <class 'NoneType'>\n"
-        "    'a_list_of_int' : Wrong type! Expected <class 'list'> but giving <class 'NoneType'>\n"
-        "    'a_tuple_of_bool' : Wrong type! Expected <class 'tuple'> but giving <class 'NoneType'>\n"
-        "    'a_base_a' : Wrong type! Expected <class 'tests.kobject.from_json.test_main.BaseA'> but "
-        "giving <class 'NoneType'>\n    'a_base_b' : Wrong type! Expected <class 'tests.kobject.from_"
-        "json.test_main.BaseB'> but giving <class 'NoneType'>\n    'a_list_of_base_a' : Wrong type! Ex"
-        "pected <class 'list'> but giving <class 'NoneType'>\n",
+        "Missing content -> The fallow attr are not presente a_int, a_str"
+        ", a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_"
+        "base_a",
     )
-    FromJSON.set_custom_exception(None)
