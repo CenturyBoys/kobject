@@ -28,7 +28,8 @@ class ToJSON:
         _dict_representation = {}
         _annotations = typing.get_type_hints(type(self))
 
-        del _annotations["_Kobject__custom_exception"]
+        if "_Kobject__custom_exception" in _annotations:
+            del _annotations["_Kobject__custom_exception"]
 
         if "_FromJSON__custom_exception" in _annotations:
             del _annotations["_FromJSON__custom_exception"]
