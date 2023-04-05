@@ -60,6 +60,21 @@ class FromJSON:
         return default_value != inspect._empty  # pylint: disable=W0212
 
     @classmethod
+    def resolve_type(cls, attr_type, attr_value):
+        """
+        Cast attr value to attr type
+        """
+        try:
+            return JSONDecoder.type_caster(attr_type, attr_value)
+        except TypeError as exception:
+            message = f"Unable to cast value {attr_value} of type {type(attr_value)} to {attr_type}"
+            if cls.__custom_exception:
+                raise cls.__custom_exception(  # pylint: disable=E1102
+                    message
+                ) from exception
+            raise TypeError(message) from exception
+
+    @classmethod
     def from_dict(cls: T, dict_repr: dict) -> typing.Type[T]:
         """
         Returns a class instance by the giving dict representation
@@ -79,10 +94,11 @@ class FromJSON:
                 continue
             if attr_not_present and not has_default_value:
                 _missing.append(attr)
+                continue
             attr_value = dict_repr.get(attr)
             is_a_iterable = isinstance(attr_value, (list, tuple))
             if not is_a_iterable:
-                dict_repr[attr] = JSONDecoder.type_caster(
+                dict_repr[attr] = cls.resolve_type(
                     attr_type=attr_type, attr_value=attr_value
                 )
                 continue
@@ -92,9 +108,7 @@ class FromJSON:
             attr_value_new = []
             for attr_value_item in attr_value:
                 attr_value_new.append(
-                    JSONDecoder.type_caster(
-                        attr_type=sub_type, attr_value=attr_value_item
-                    )
+                    cls.resolve_type(attr_type=sub_type, attr_value=attr_value_item)
                 )
             dict_repr[attr] = attr_type(attr_value_new)
         if _missing:
