@@ -143,10 +143,13 @@ class JSONDecoder:
         for map_attr_type, resolver in cls.types_resolver:
             if inspect.isclass(attr_type) and issubclass(attr_type, map_attr_type):
                 return resolver(attr_type, attr_value)
+        return attr_value
 
 
 FromJSON.set_decoder_resolver(bool, lambda attr_type, value: value)
-FromJSON.set_decoder_resolver(float, lambda attr_type, value: float(value))
+FromJSON.set_decoder_resolver(
+    float, lambda attr_type, value: float(value) if isinstance(value, int) else value
+)
 FromJSON.set_decoder_resolver(int, lambda attr_type, value: value)
 FromJSON.set_decoder_resolver(str, lambda attr_type, value: value)
 FromJSON.set_decoder_resolver(
