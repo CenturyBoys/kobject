@@ -33,6 +33,14 @@ class BaseC(Kobject, FromJSON, ToJSON):
     a_list_field: list = field(default_factory=list)
 
 
+@dataclass
+class BaseD(Kobject, FromJSON, ToJSON):
+    a_list_of_int: List[int]
+    a_list_of_bool: List[bool]
+    a_list_of_float: List[float]
+    a_list_of_str: List[int]
+
+
 def test_from_json_error_default_exception():
     with pytest.raises(JSONDecodeError) as error:
         BaseC.from_json(payload=b"{")
@@ -100,4 +108,25 @@ def test_from_json_empty_payload():
         "Missing content -> The fallow attr are not presente a_int, a_str"
         ", a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_"
         "base_a",
+    )
+
+
+def test_from_json_wrong_type():
+    payload = (
+        b"{"
+        b'"a_list_of_int": null,'
+        b'"a_list_of_bool": 0,'
+        b'"a_list_of_float": "lala",'
+        b'"a_list_of_str": 1.3'
+        b"}"
+    )
+    with pytest.raises(TypeError) as error:
+        BaseD.from_json(payload=payload)
+    assert error.value.args == (
+        "Validation Errors:\n    'a_list_of_int' : Wrong type! Expected <class "
+        "'list'> but giving <class 'NoneType'>\n    'a_list_of_bool' : Wrong ty"
+        "pe! Expected <class 'list'> but giving <class 'int'>\n    'a_list_of_f"
+        "loat' : Wrong type! Expected <class 'list'> but giving <class 'str'>\n"
+        "    'a_list_of_str' : Wrong type! Expected <class 'list'> but giving <"
+        "class 'float'>\n",
     )
