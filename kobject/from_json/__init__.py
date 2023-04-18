@@ -75,7 +75,7 @@ class FromJSON:
             raise TypeError(message) from exception
 
     @classmethod
-    def from_dict(cls: T, dict_repr: dict) -> typing.Type[T]:
+    def from_dict(cls: T, dict_repr: dict) -> typing.Type[T]:  # pylint: disable=R0914
         """
         Returns a class instance by the giving dict representation
         """
@@ -96,8 +96,13 @@ class FromJSON:
                 _missing.append(attr)
                 continue
             attr_value = dict_repr.get(attr)
-            is_a_iterable = isinstance(attr_value, (list, tuple))
-            if not is_a_iterable:
+            is_attr_a_iterable = issubclass(
+                JSONDecoder.get_base_type(attr_type=attr_type), (list, tuple)
+            )
+            is_value_a_iterable = isinstance(attr_value, (list, tuple))
+            if not is_attr_a_iterable or (
+                is_attr_a_iterable and not is_value_a_iterable
+            ):
                 dict_repr[attr] = cls.resolve_type(
                     attr_type=attr_type, attr_value=attr_value
                 )
@@ -134,6 +139,15 @@ class JSONDecoder:
         sub_type = attr_type.__args__[0]
         attr_type = attr_type.__origin__
         return attr_type, sub_type
+
+    @staticmethod
+    def get_base_type(attr_type):
+        """
+        Returns the base type if the parameter attr_type has __original__ attribute
+        """
+        if hasattr(attr_type, "__origin__"):
+            attr_type = attr_type.__origin__
+        return attr_type
 
     @classmethod
     def type_caster(cls, attr_type, attr_value):  # pylint: disable=R1710

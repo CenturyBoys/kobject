@@ -41,6 +41,14 @@ class BaseD(Kobject, FromJSON, ToJSON):
     a_list_of_str: List[int]
 
 
+@dataclass
+class BaseE(Kobject, FromJSON, ToJSON):
+    a_list_of_int: int
+    a_list_of_bool: bool
+    a_list_of_float: float
+    a_list_of_str: int
+
+
 def test_from_json_error_default_exception():
     with pytest.raises(JSONDecodeError) as error:
         BaseC.from_json(payload=b"{")
@@ -111,7 +119,7 @@ def test_from_json_empty_payload():
     )
 
 
-def test_from_json_wrong_type():
+def test_from_json_wrong_type_expected_list():
     payload = (
         b"{"
         b'"a_list_of_int": null,'
@@ -129,4 +137,24 @@ def test_from_json_wrong_type():
         "loat' : Wrong type! Expected <class 'list'> but giving <class 'str'>\n"
         "    'a_list_of_str' : Wrong type! Expected <class 'list'> but giving <"
         "class 'float'>\n",
+    )
+
+
+def test_from_json_wrong_type_list():
+    payload = (
+        b"{"
+        b'"a_list_of_int": [],'
+        b'"a_list_of_bool": [],'
+        b'"a_list_of_float": [],'
+        b'"a_list_of_str": []'
+        b"}"
+    )
+    with pytest.raises(TypeError) as error:
+        BaseE.from_json(payload=payload)
+    assert error.value.args == (
+        "Validation Errors:\n    'a_list_of_int' : Wrong type! Expected <class 'int'"
+        "> but giving <class 'list'>\n    'a_list_of_bool' : Wrong type! Expected <c"
+        "lass 'bool'> but giving <class 'list'>\n    'a_list_of_float' : Wrong type!"
+        " Expected <class 'float'> but giving <class 'list'>\n    'a_list_of_str' : "
+        "Wrong type! Expected <class 'int'> but giving <class 'list'>\n",
     )
