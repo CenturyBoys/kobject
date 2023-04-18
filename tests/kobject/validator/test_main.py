@@ -82,13 +82,12 @@ def test_simple_attr_error(simple_attr):
         )
     assert error.type == TypeError
     assert error.value.args == (
-        "Validation Errors:\n"
-        "    'a_int' : Wrong type! Expected <class 'int'> but giving <class 'str'>\n"
-        "    'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'int'>\n"
-        "    'a_str' : Wrong type! Expected <class 'str'> but giving <class 'float'>\n"
-        "    'a_float' : Wrong type! Expected <class 'float'> but giving <class 'bool'>\n"
-        "    'a_object' : Wrong type! Expected <class 'tests.kobject.validator.test_main.StubInstance'> "
-        "but giving <class 'tests.kobject.validator.test_main.test_simple_attr_error.<locals>.E'>\n",
+        "Validation Errors:\n    'a_int' : Wrong type! Expected <class 'int'> but giving <class 'str'>\n    "
+        "'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'int'>\n    'a_str' : Wrong type! "
+        "Expected <class 'str'> but giving <class 'float'>\n    'a_float' : Wrong type! Expected <class 'flo"
+        "at'> but giving <class 'bool'>\n    'a_object' : Wrong type! Expected <class 'tests.kobject.validat"
+        "or.test_main.StubInstance'> but giving <class 'tests.kobject.validator.test_main.test_simple_attr_e"
+        "rror.<locals>.E'>\n",
     )
 
 
