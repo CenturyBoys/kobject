@@ -172,4 +172,9 @@ FromJSON.set_decoder_resolver(
     if isinstance(value, dict)
     else value,
 )
-FromJSON.set_decoder_resolver(Enum, lambda attr_type, value: attr_type(value))
+FromJSON.set_decoder_resolver(
+    Enum,
+    lambda attr_type, value: attr_type(value)
+    if any(value == i.value for i in attr_type)
+    else value,
+)
