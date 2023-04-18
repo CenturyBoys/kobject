@@ -1,5 +1,6 @@
 import datetime
 from dataclasses import dataclass, field
+from enum import Enum
 from json import JSONDecodeError
 from typing import List, Tuple
 from uuid import UUID
@@ -47,6 +48,15 @@ class BaseE(Kobject, FromJSON, ToJSON):
     a_list_of_bool: bool
     a_list_of_float: float
     a_list_of_str: int
+
+
+class StubEnum(Enum):
+    LORO = 1
+
+
+@dataclass
+class BaseF(Kobject, FromJSON, ToJSON):
+    a_stub_enum: StubEnum
 
 
 def test_from_json_error_default_exception():
@@ -157,4 +167,12 @@ def test_from_json_wrong_type_list():
         "lass 'bool'> but giving <class 'list'>\n    'a_list_of_float' : Wrong type!"
         " Expected <class 'float'> but giving <class 'list'>\n    'a_list_of_str' : "
         "Wrong type! Expected <class 'int'> but giving <class 'list'>\n",
+    )
+
+
+def test_from_json_error_enum_invalid_value():
+    with pytest.raises(TypeError) as error:
+        BaseF.from_json(payload=b'{"a_stub_enum": 2}')
+    assert error.value.args == (
+        "Validation Errors:\n    'a_stub_enum' : Wrong type! Expected <enum 'StubEnum'> but giving <class 'int'>\n",
     )
