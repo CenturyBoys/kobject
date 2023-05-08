@@ -110,11 +110,7 @@ def test_from_json_empty_payload_custom_exception():
     FromJSON.set_custom_exception(MyException)
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=b"{}")
-    assert error.value.args == (
-        "Missing content -> The fallow attr are not presente a_int, a_str"
-        ", a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_"
-        "base_a",
-    )
+    assert error.value.args == ("Invalid content -> b'{}'",)
     FromJSON.set_custom_exception(None)
 
 

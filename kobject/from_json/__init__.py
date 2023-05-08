@@ -42,14 +42,14 @@ class FromJSON:
         """
         try:
             dict_repr = json.loads(payload)
+            instance = cls.from_dict(dict_repr=dict_repr)
+            return instance
         except Exception as original_error:
             if cls.__custom_exception is not None:
                 raise cls.__custom_exception(  # pylint: disable=E1102
                     f"Invalid content -> {str(payload)}",
                 ) from original_error
             raise original_error
-        instance = cls.from_dict(dict_repr=dict_repr)
-        return instance
 
     @staticmethod
     def attribute_has_default_value(attr: str, attr_metadata: dict) -> bool:
