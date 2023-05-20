@@ -84,7 +84,8 @@ class FromJSON:
         _annotations_meta = dict(inspect.signature(cls.__init__).parameters.items())
         _missing = []
 
-        del _annotations["_Kobject__custom_exception"]
+        if "_Kobject__custom_exception" in _annotations:
+            del _annotations["_Kobject__custom_exception"]
         del _annotations["_FromJSON__custom_exception"]
 
         for attr, attr_type in _annotations.items():
