@@ -99,15 +99,6 @@ class Kobject:
         attr: any,
         index: int = None,
     ):
-        is_a_dict = attr_type in (dict, Dict)
-        has_dict_on_types = isinstance(attr_type, (tuple, list)) and (
-            dict in attr_type or Dict in attr_type
-        )
-        if is_a_dict or has_dict_on_types:
-            message = f"Invalid type! The attribute '{attr}' is a {dict}"
-            self.__save_errors(_errors=_errors, message=message, attr=attr)
-            return
-
         if self.__attribute_has_default_value(attr=attr, attr_value=attr_value):
             return
 
