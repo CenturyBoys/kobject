@@ -119,9 +119,8 @@ def test_from_json_empty_payload():
     with pytest.raises(TypeError) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
-        "Missing content -> The fallow attr are not presente a_int, a_str"
-        ", a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_"
-        "base_a",
+        "Missing content -> The fallow attr are not presente a_int, a_str, "
+        "a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_base_a",
     )
 
 
