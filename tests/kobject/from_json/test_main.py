@@ -7,12 +7,11 @@ from uuid import UUID
 
 import pytest
 
-from kobject import Kobject, ToJSON
-from kobject.from_json import FromJSON
+from kobject import Kobject, FromJSON
 
 
 @dataclass
-class BaseA(Kobject, FromJSON, ToJSON):
+class BaseA(Kobject):
     a_datetime: datetime.datetime
 
 
@@ -22,7 +21,7 @@ class BaseB:
 
 
 @dataclass
-class BaseC(Kobject, FromJSON, ToJSON):
+class BaseC(Kobject):
     a_int: int
     a_str: str
     a_list_of_int: List[int]
@@ -35,7 +34,7 @@ class BaseC(Kobject, FromJSON, ToJSON):
 
 
 @dataclass
-class BaseD(Kobject, FromJSON, ToJSON):
+class BaseD(Kobject):
     a_list_of_int: List[int]
     a_list_of_bool: List[bool]
     a_list_of_float: List[float]
@@ -43,7 +42,7 @@ class BaseD(Kobject, FromJSON, ToJSON):
 
 
 @dataclass
-class BaseE(Kobject, FromJSON, ToJSON):
+class BaseE(Kobject):
     a_list_of_int: int
     a_list_of_bool: bool
     a_list_of_float: float
@@ -55,7 +54,7 @@ class StubEnum(Enum):
 
 
 @dataclass
-class BaseF(Kobject, FromJSON, ToJSON):
+class BaseF(Kobject):
     a_stub_enum: StubEnum
 
 
@@ -68,11 +67,11 @@ def test_from_json_error_default_exception():
 
 
 def test_from_json_error_custom_exception():
-    FromJSON.set_custom_exception(Exception)
+    FromJSON.set_content_check_custom_exception(Exception)
     with pytest.raises(Exception) as error:
         BaseC.from_json(payload=b"{")
     assert error.value.args == ("Invalid content -> b'{'",)
-    FromJSON.set_custom_exception(None)
+    FromJSON.set_content_check_custom_exception(None)
 
 
 def test_from_json():
@@ -107,15 +106,15 @@ def test_from_json_empty_payload_custom_exception():
     class MyException(Exception):
         pass
 
-    FromJSON.set_custom_exception(MyException)
+    FromJSON.set_content_check_custom_exception(MyException)
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == ("Invalid content -> b'{}'",)
-    FromJSON.set_custom_exception(None)
+    FromJSON.set_content_check_custom_exception(None)
 
 
 def test_from_json_empty_payload():
-    FromJSON.set_custom_exception(None)
+    FromJSON.set_content_check_custom_exception(None)
     with pytest.raises(TypeError) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
@@ -136,12 +135,11 @@ def test_from_json_wrong_type_expected_list():
     with pytest.raises(TypeError) as error:
         BaseD.from_json(payload=payload)
     assert error.value.args == (
-        "Validation Errors:\n    'a_list_of_int' : Wrong type! Expected <class "
-        "'list'> but giving <class 'NoneType'>\n    'a_list_of_bool' : Wrong ty"
-        "pe! Expected <class 'list'> but giving <class 'int'>\n    'a_list_of_f"
-        "loat' : Wrong type! Expected <class 'list'> but giving <class 'str'>\n"
-        "    'a_list_of_str' : Wrong type! Expected <class 'list'> but giving <"
-        "class 'float'>\n",
+        "Class 'BaseD' type error:\n"
+        " Wrong type for a_list_of_int: typing.List[int] != '<class 'NoneType'>'\n"
+        " Wrong type for a_list_of_bool: typing.List[bool] != '<class 'int'>'\n"
+        " Wrong type for a_list_of_float: typing.List[float] != '<class 'str'>'\n"
+        " Wrong type for a_list_of_str: typing.List[int] != '<class 'float'>'",
     )
 
 
@@ -157,11 +155,11 @@ def test_from_json_wrong_type_list():
     with pytest.raises(TypeError) as error:
         BaseE.from_json(payload=payload)
     assert error.value.args == (
-        "Validation Errors:\n    'a_list_of_int' : Wrong type! Expected <class 'int'"
-        "> but giving <class 'list'>\n    'a_list_of_bool' : Wrong type! Expected <c"
-        "lass 'bool'> but giving <class 'list'>\n    'a_list_of_float' : Wrong type!"
-        " Expected <class 'float'> but giving <class 'list'>\n    'a_list_of_str' : "
-        "Wrong type! Expected <class 'int'> but giving <class 'list'>\n",
+        "Class 'BaseE' type error:\n"
+        " Wrong type for a_list_of_int: <class 'int'> != '<class 'list'>'\n"
+        " Wrong type for a_list_of_bool: <class 'bool'> != '<class 'list'>'\n"
+        " Wrong type for a_list_of_float: <class 'float'> != '<class 'list'>'\n"
+        " Wrong type for a_list_of_str: <class 'int'> != '<class 'list'>'",
     )
 
 
@@ -169,5 +167,6 @@ def test_from_json_error_enum_invalid_value():
     with pytest.raises(TypeError) as error:
         BaseF.from_json(payload=b'{"a_stub_enum": 2}')
     assert error.value.args == (
-        "Validation Errors:\n    'a_stub_enum' : Wrong type! Expected <enum 'StubEnum'> but giving <class 'int'>\n",
+        "Class 'BaseF' type error:\n"
+        " Wrong type for a_stub_enum: <enum 'StubEnum'> != '<class 'int'>'",
     )

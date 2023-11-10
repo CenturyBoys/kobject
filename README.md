@@ -115,16 +115,18 @@ By default Kobject raise a ```TypeError``` but you can override this exception u
 from dataclasses import dataclass
 from kobject import Kobject
 
+
 class CustomException(Exception):
     pass
 
 
-Kobject.set_custom_exception(CustomException)
+Kobject.set_validation_custom_exception(CustomException)
 
 
 @dataclass
 class StubClass(Kobject):
     a__int: int
+
 
 instance = StubClass(a__int="")
 ```
