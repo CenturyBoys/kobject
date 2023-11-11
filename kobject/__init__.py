@@ -1,7 +1,14 @@
 """
-Help for you class to validate types, encode json and decode json
+Know your object a __init__ type validator
 """
 
-from .from_json import FromJSON
-from .validator import Kobject
-from .to_json import ToJSON
+from kobject.from_json import FromJSON
+from kobject.to_json import ToJSON
+from kobject.validator import Validator
+
+
+class Kobject(Validator, FromJSON, ToJSON):
+    """Just use it."""
+
+
+__all__ = ["Kobject", "FromJSON", "ToJSON"]

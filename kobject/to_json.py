@@ -1,18 +1,20 @@
 """
 Package to helper to encode class in json
 """
-import inspect
+
 import json
-import typing
+from typing import Callable
+
+from kobject.common import InheritanceFieldMeta
 
 
-class ToJSON:
+class ToJSON(InheritanceFieldMeta):
     """
     ToJSON will provide a dict() and a to_json() methods for your class
     """
 
     @staticmethod
-    def set_encoder_resolver(attr_type, resolver_callback: typing.Callable):
+    def set_encoder_resolver(attr_type, resolver_callback: Callable):
         """
         Register a resolver for a class or subclass
         attr_type: int,str,bool,float or any other class
@@ -26,25 +28,29 @@ class ToJSON:
         Returns dict representation of your object
         """
         _dict_representation = {}
-        _annotations = typing.get_type_hints(type(self))
 
-        if "_Kobject__custom_exception" in _annotations:
-            del _annotations["_Kobject__custom_exception"]
-
-        if "_FromJSON__custom_exception" in _annotations:
-            del _annotations["_FromJSON__custom_exception"]
-
-        for attr, attr_type in _annotations.items():
-            attr_value = object.__getattribute__(self, attr)
-            if not isinstance(attr_value, (list, tuple)):
-                _dict_representation.update({attr: JSONEncoder.default(attr_value)})
+        for field in self._with_field_map():
+            attr_value = getattr(self, field.name)
+            if not isinstance(attr_value, list | tuple | dict):
+                _dict_representation.update(
+                    {field.name: JSONEncoder.default(attr_value)}
+                )
                 continue
-            attr_value_new = []
-            for attr_value_item in attr_value:
-                attr_value_new.append(JSONEncoder.default(attr_value_item))
-            attr_type = JSONEncoder.get_type(attr_type=attr_type)
-            attr_value = attr_type(attr_value_new)
-            _dict_representation.update({attr: attr_value})
+            if isinstance(attr_value, list | tuple):
+                attr_value_new = []
+                for attr_value_item in attr_value:
+                    attr_value_new.append(JSONEncoder.default(attr_value_item))
+                _dict_representation.update({field.name: attr_value_new})
+                continue
+            if isinstance(attr_value, dict):
+                attr_value_new = {}
+                for key, value in attr_value.items():
+                    attr_value_new.update(
+                        {JSONEncoder.default(key): JSONEncoder.default(value)}
+                    )
+                _dict_representation.update({field.name: attr_value_new})
+                continue
+
         return _dict_representation
 
     def to_json(self) -> bytes:
