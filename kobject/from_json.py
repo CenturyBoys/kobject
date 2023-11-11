@@ -1,12 +1,74 @@
+"""
+Package to  helper to decode json in a class instance
+"""
+
 import json
 from enum import Enum
-from inspect import isclass, Signature
-from typing import List, Type, Any, Callable
+from inspect import isclass
+from typing import Type, Any, Callable
 
-from kobject.common import FieldMeta, T
+from kobject.common import T, InheritanceFieldMeta
 
 
-class FromJSON:
+def _resolve_type(attr_type, attr_value):
+    try:
+        return JSONDecoder.type_caster(attr_type, attr_value)
+    except TypeError as exception:
+        message = f"Unable to cast value {attr_value} of type {type(attr_value)} to {attr_type}"
+        if FromJSON.__from_json_custom_exception__:
+            raise FromJSON.__from_json_custom_exception__(  # pylint: disable=E1102
+                message
+            ) from exception
+        raise TypeError(message) from exception
+
+
+def _resolve_list(_type: Type, attr_value: Any) -> list:
+    attr_value_new = []
+    for attr_value_item in attr_value:
+        for sub_types in _type.__args__:
+            try:
+                attr_value_new.append(
+                    _resolve_type(
+                        attr_type=sub_types,
+                        attr_value=attr_value_item,
+                    )
+                )
+                break
+            finally:
+                continue
+    return attr_value_new
+
+
+def _resolve_tuple(_type: Type, attr_value: Any):
+    attr_value_new = []
+    for attr_value_item, attr_type in zip(attr_value, _type.__args__):
+        attr_value_new.append(
+            _resolve_type(
+                attr_type=attr_type,
+                attr_value=attr_value_item,
+            )
+        )
+    return tuple(attr_value_new)
+
+
+def _resolve_dict(_type: Type, attr_value: Any):
+    attr_value_new = {}
+    for key, value in attr_value.items():
+        attr_value_new.update(
+            {
+                _resolve_type(
+                    attr_type=_type.__args__[0],
+                    attr_value=key,
+                ): _resolve_type(
+                    attr_type=_type.__args__[1],
+                    attr_value=value,
+                )
+            }
+        )
+    return attr_value_new
+
+
+class FromJSON(InheritanceFieldMeta):
     """
     FromJSON will provide a from_json() and a from_dict() methods to instantiate your objects
     """
@@ -48,37 +110,6 @@ class FromJSON:
             raise original_error
 
     @classmethod
-    def resolve_type(cls, attr_type, attr_value):
-        """
-        Cast attr value to attr type
-        """
-        try:
-            return JSONDecoder.type_caster(attr_type, attr_value)
-        except TypeError as exception:
-            message = f"Unable to cast value {attr_value} of type {type(attr_value)} to {attr_type}"
-            if cls.__from_json_custom_exception__:
-                raise cls.__from_json_custom_exception__(  # pylint: disable=E1102
-                    message
-                ) from exception
-            raise TypeError(message) from exception
-
-    __field_map__: list[FieldMeta] = None
-
-    @classmethod
-    def __with_field_map(cls) -> List[FieldMeta]:
-        if cls.__field_map__ is None:
-            cls.__field_map__ = []
-            for param in Signature.from_callable(cls).parameters.values():
-                cls.__field_map__.append(
-                    FieldMeta.new_one(
-                        name=param.name,
-                        annotation=param.annotation,
-                        value=param.default,
-                    )
-                )
-        return cls.__field_map__
-
-    @classmethod
     def from_dict(cls: T, dict_repr: dict) -> Type[T]:  # pylint: disable=R0914
         """
         Returns a class instance by the giving dict representation
@@ -86,78 +117,48 @@ class FromJSON:
 
         _missing = []
 
-        for field in cls.__with_field_map():
+        for field in cls._with_field_map():
             attr_not_present = field.name not in dict_repr
+
             if attr_not_present and field.have_default_value:
                 continue
+
             if attr_not_present and not field.have_default_value:
                 _missing.append(field.name)
                 continue
+
             attr_value = dict_repr.get(field.name)
             if attr_value == field.default:
                 continue
 
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
-            is_attr_a_iterable = issubclass(base_type, list | tuple | dict)
 
-            if is_attr_a_iterable is False:
-                dict_repr[field.name] = cls.resolve_type(
+            if issubclass(base_type, list | tuple | dict) is False:
+                dict_repr[field.name] = _resolve_type(
                     attr_type=field.annotation, attr_value=attr_value
                 )
-                continue
 
-            if issubclass(base_type, list) and isinstance(attr_value, list):
-                attr_value_new = []
-                for attr_value_item in attr_value:
-                    for sub_types in field.annotation.__args__:
-                        try:
-                            attr_value_new.append(
-                                cls.resolve_type(
-                                    attr_type=sub_types,
-                                    attr_value=attr_value_item,
-                                )
-                            )
-                            break
-                        except:
-                            continue
-                dict_repr[field.name] = attr_value_new
-                continue
+            elif issubclass(base_type, list) and isinstance(attr_value, list):
+                dict_repr[field.name] = _resolve_list(
+                    _type=field.annotation, attr_value=attr_value
+                )
 
-            if issubclass(base_type, tuple) and isinstance(attr_value, list):
-                attr_value_new = []
-                for attr_value, attr_type in zip(attr_value, field.annotation.__args__):
-                    attr_value_new.append(
-                        cls.resolve_type(
-                            attr_type=attr_type,
-                            attr_value=attr_value,
-                        )
-                    )
-                dict_repr[field.name] = tuple(attr_value_new)
-                continue
+            elif issubclass(base_type, tuple) and isinstance(attr_value, list):
+                dict_repr[field.name] = _resolve_tuple(
+                    _type=field.annotation, attr_value=attr_value
+                )
 
-            if issubclass(base_type, dict) and isinstance(attr_value, dict):
-                attr_value_new = {}
-                for key, value in attr_value.items():
-                    attr_value_new.update(
-                        {
-                            cls.resolve_type(
-                                attr_type=field.annotation.__args__[0],
-                                attr_value=key,
-                            ): cls.resolve_type(
-                                attr_type=field.annotation.__args__[1],
-                                attr_value=value,
-                            )
-                        }
-                    )
-                dict_repr[field.name] = attr_value_new
-                continue
+            elif issubclass(base_type, dict) and isinstance(attr_value, dict):
+                dict_repr[field.name] = _resolve_dict(
+                    _type=field.annotation, attr_value=attr_value
+                )
 
         if _missing:
             message = f"Missing content -> The fallow attr are not presente {', '.join(_missing)}"
             if cls.__from_json_custom_exception__:
-                raise cls.__from_json_custom_exception__(
+                raise cls.__from_json_custom_exception__(  # pylint: disable=E1102
                     message
-                )  # pylint: disable=E1102
+                )
             raise TypeError(message)
         return cls(**dict_repr)
 

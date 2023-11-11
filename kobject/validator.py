@@ -1,77 +1,91 @@
-from inspect import Signature, _empty
+"""
+Object __init__ type validator
+"""
+
+from inspect import _empty
 from types import GenericAlias
 from typing import (
-    _SpecialGenericAlias,
     _GenericAlias,
-    _UnionGenericAlias,
     _SpecialForm,
     Type,
     Any,
-    List,
 )
 
-from kobject.common import FieldMeta
+from kobject.common import FieldMeta, InheritanceFieldMeta
 
 
-def _validate_field_value(value: Any, field: FieldMeta) -> bool:
-    if value == field.default:
-        return True
+def _validate_special_form(field: FieldMeta, value: Any) -> bool:
+    _is_valid = False
+    for options_annotation in field.annotation.__args__:
+        if _validate_field_value(
+            value, FieldMeta.get_generic_field_meta(options_annotation)
+        ):
+            _is_valid = True
+            break
+    return _is_valid
 
-    if value is _empty and field.required:
-        return False
 
-    if value is _empty and field.required is False:
-        value = field.default
-
-    if field.annotation == Ellipsis:
-        return True
-
-    if isinstance(field.annotation, GenericAlias | _GenericAlias) is False:
-        return isinstance(value, field.annotation)
-
-    if isinstance(field.annotation.__origin__, _SpecialForm):
-        for options_annotation in field.annotation.__args__:
-            if _validate_field_value(
-                value, FieldMeta.get_generic_field_meta(options_annotation)
+def _validate_dict(field: FieldMeta, value: Any) -> bool:
+    for item in value.items():
+        for i in range(2):
+            if not _validate_field_value(
+                item[i],
+                FieldMeta.get_generic_field_meta(field.annotation.__args__[i]),
             ):
-                return True
-        return False
+                return False
+    return True
 
-    if (
-        isinstance(
-            value,
-            field.annotation.__origin__,
-        )
-        is False
-    ):
-        return False
 
-    if issubclass(field.annotation.__origin__, dict):
-        for item in value.items():
-            for i in range(2):
-                if (
-                    _validate_field_value(
-                        item[i],
-                        FieldMeta.get_generic_field_meta(field.annotation.__args__[i]),
-                    )
-                    is False
-                ):
-                    return False
+def _validate_tuple_list(field: FieldMeta, value: Any) -> bool:
     for item in value:
-        is_valid = False
+        is_item_valid = False
         for type_options in field.annotation.__args__:
             if _validate_field_value(
                 item, FieldMeta.get_generic_field_meta(type_options)
             ):
-                is_valid = True
+                is_item_valid = True
                 break
-        if is_valid:
-            continue
-        return False
+        if not is_item_valid:
+            return False
     return True
 
 
-class Validator:
+def _validate_field_value(value: Any, field: FieldMeta) -> bool:
+    _is_valid = True
+
+    if value == field.default:
+        pass
+
+    elif value is _empty and field.required:
+        _is_valid = False
+
+    elif value is _empty and field.required is False:
+        pass
+
+    elif field.annotation in (Ellipsis, Any):
+        pass
+
+    elif isinstance(field.annotation, GenericAlias | _GenericAlias) is False:
+        _is_valid = isinstance(value, field.annotation)
+
+    elif isinstance(field.annotation.__origin__, _SpecialForm):
+        _is_valid = _validate_special_form(field, value)
+
+    elif not isinstance(
+        value,
+        field.annotation.__origin__,
+    ):
+        _is_valid = False
+
+    elif issubclass(field.annotation.__origin__, dict):
+        _is_valid = _validate_dict(field, value)
+    else:
+        _is_valid = _validate_tuple_list(field, value)
+
+    return _is_valid
+
+
+class Validator(InheritanceFieldMeta):
     """
     Validator provides a __init__ attribute type checker.
     Will rise a TypeError exception with all validation errors
@@ -79,36 +93,18 @@ class Validator:
     """
 
     __custom_exception__: Type[Exception] = None
-    __field_map__: list[FieldMeta] = None
     __lazy_type_check__: bool = False
-
-    @classmethod
-    def __with_field_map(cls) -> List[FieldMeta]:
-        if cls.__field_map__ is None:
-            cls.__field_map__ = []
-            for param in Signature.from_callable(cls).parameters.values():
-                cls.__field_map__.append(
-                    FieldMeta.new_one(
-                        name=param.name,
-                        annotation=param.annotation,
-                        value=param.default,
-                    )
-                )
-        return cls.__field_map__
 
     def __post_init__(self):
         self.__validate_model()
 
     def __validate_model(self):
         _errors = []
-        for field in self.__with_field_map():
-            if (
-                _validate_field_value(self.__dict__.get(field.name, _empty), field)
-                is False
-            ):
+        for field in self._with_field_map():
+            if _validate_field_value(getattr(self, field.name), field) is False:
                 _errors.append(
                     f"Wrong type for {field.name}:"
-                    f" {field.annotation} != '{type(self.__dict__.get(field.name, _empty))}'"
+                    f" {field.annotation} != '{type(getattr(self, field.name))}'"
                 )
                 if self.__lazy_type_check__:
                     break
@@ -130,18 +126,18 @@ class Validator:
         cls.__custom_exception__ = exception
 
     @classmethod
-    def set_lazy_type_check(cls, on: bool):
+    def set_lazy_type_check(cls, status: bool):
         """
         Will change the type  (TypeError)
         """
-        cls.__lazy_type_check__ = on
+        cls.__lazy_type_check__ = status
 
     def __repr__(self):
         class_name = self.__class__.__name__
-        values = []
-        for field_map in self.__with_field_map():
-            attr_value = object.__getattribute__(self, field_map.name)
-            values.append(f"{field_map.name}={attr_value}")
+        values = [
+            f"{field_map.name}={getattr(self, field_map.name)}"
+            for field_map in self._with_field_map()
+        ]
         return f"<{class_name} ({', '.join(values)})>"
 
     def __str__(self):

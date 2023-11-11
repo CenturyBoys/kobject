@@ -1,11 +1,14 @@
+"""
+Package to helper to encode class in json
+"""
+
 import json
-from inspect import Signature
-from typing import List, Callable
+from typing import Callable
 
-from kobject.common import FieldMeta
+from kobject.common import InheritanceFieldMeta
 
 
-class ToJSON:
+class ToJSON(InheritanceFieldMeta):
     """
     ToJSON will provide a dict() and a to_json() methods for your class
     """
@@ -20,30 +23,14 @@ class ToJSON:
         """
         JSONEncoder.base_types_resolver.update({attr_type: resolver_callback})
 
-    __field_map__: list[FieldMeta] = None
-
-    @classmethod
-    def __with_field_map(cls) -> List[FieldMeta]:
-        if cls.__field_map__ is None:
-            cls.__field_map__ = []
-            for param in Signature.from_callable(cls).parameters.values():
-                cls.__field_map__.append(
-                    FieldMeta.new_one(
-                        name=param.name,
-                        annotation=param.annotation,
-                        value=param.default,
-                    )
-                )
-        return cls.__field_map__
-
     def dict(self):
         """
         Returns dict representation of your object
         """
         _dict_representation = {}
 
-        for field in self.__with_field_map():
-            attr_value = object.__getattribute__(self, field.name)
+        for field in self._with_field_map():
+            attr_value = getattr(self, field.name)
             if not isinstance(attr_value, list | tuple | dict):
                 _dict_representation.update(
                     {field.name: JSONEncoder.default(attr_value)}
@@ -61,6 +48,7 @@ class ToJSON:
                     attr_value_new.update(
                         {JSONEncoder.default(key): JSONEncoder.default(value)}
                     )
+                _dict_representation.update({field.name: attr_value_new})
                 continue
 
         return _dict_representation
