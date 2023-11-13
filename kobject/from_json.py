@@ -118,6 +118,9 @@ class FromJSON(InheritanceFieldMeta):
                 _missing.append(field.name)
                 continue
 
+            if attr_value == field.default:
+                continue
+
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
 
             if issubclass(base_type, list | tuple | dict) is False:
