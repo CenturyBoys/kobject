@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import List, Tuple, Union, Optional, Dict, Coroutine, Callable
+from typing import List, Tuple, Union, Optional, Dict, Coroutine, Callable, Any
 
 import pytest
 
@@ -32,6 +32,7 @@ def simple_attr(request):
             a_bool: bool
             a_str: str
             a_float: float
+            a_any: Any
             a_object: StubInstance
 
         return StubClass
@@ -42,6 +43,7 @@ def simple_attr(request):
             a_bool: bool
             a_str: str
             a_float: float
+            a_any: Any
             a_object: StubInstance
 
             def __init__(
@@ -50,12 +52,14 @@ def simple_attr(request):
                 a_bool: bool,
                 a_str: str,
                 a_float: float,
+                a_any: Any,
                 a_object: StubInstance,
             ):
                 self.a_int = a_int
                 self.a_bool = a_bool
                 self.a_str = a_str
                 self.a_float = a_float
+                self.a_any = a_any
                 self.a_object = a_object
                 self.__post_init__()
 
@@ -73,11 +77,13 @@ def test_simple_attr_error(simple_attr):
         a_str = 1.0
         a_float = True
         a_object = E()
+        a_any = any([True, False, "", 1, 0.5])
         simple_attr(
             a_int=a_int,
             a_bool=a_bool,
             a_str=a_str,
             a_float=a_float,
+            a_any=a_any,
             a_object=a_object,
         )
     assert error.type == TypeError
@@ -97,18 +103,21 @@ def test_simple_attr(simple_attr):
     a_bool = True
     a_str = "a"
     a_float = 1.0
+    a_any = any([True, False, "", 1, 0.5])
     a_object = StubInstance(a_int=1)
     instance = simple_attr(
         a_int=a_int,
         a_bool=a_bool,
         a_str=a_str,
         a_float=a_float,
+        a_any=a_any,
         a_object=a_object,
     )
     assert instance.a_int == a_int
     assert instance.a_bool == a_bool
     assert instance.a_str == a_str
     assert instance.a_float == a_float
+    assert instance.a_any == a_any
     assert instance.a_object == a_object
 
 
