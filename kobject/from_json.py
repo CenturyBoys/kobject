@@ -10,25 +10,13 @@ from typing import Type, Any, Callable
 from kobject.common import T, InheritanceFieldMeta
 
 
-def _resolve_type(attr_type, attr_value):
-    try:
-        return JSONDecoder.type_caster(attr_type, attr_value)
-    except TypeError as exception:
-        message = f"Unable to cast value {attr_value} of type {type(attr_value)} to {attr_type}"
-        if FromJSON.__from_json_custom_exception__:
-            raise FromJSON.__from_json_custom_exception__(  # pylint: disable=E1102
-                message
-            ) from exception
-        raise TypeError(message) from exception
-
-
 def _resolve_list(_type: Type, attr_value: Any) -> list:
     attr_value_new = []
     for attr_value_item in attr_value:
         for sub_types in _type.__args__:
             try:
                 attr_value_new.append(
-                    _resolve_type(
+                    JSONDecoder.type_caster(
                         attr_type=sub_types,
                         attr_value=attr_value_item,
                     )
@@ -43,7 +31,7 @@ def _resolve_tuple(_type: Type, attr_value: Any):
     attr_value_new = []
     for attr_value_item, attr_type in zip(attr_value, _type.__args__):
         attr_value_new.append(
-            _resolve_type(
+            JSONDecoder.type_caster(
                 attr_type=attr_type,
                 attr_value=attr_value_item,
             )
@@ -56,10 +44,10 @@ def _resolve_dict(_type: Type, attr_value: Any):
     for key, value in attr_value.items():
         attr_value_new.update(
             {
-                _resolve_type(
+                JSONDecoder.type_caster(
                     attr_type=_type.__args__[0],
                     attr_value=key,
-                ): _resolve_type(
+                ): JSONDecoder.type_caster(
                     attr_type=_type.__args__[1],
                     attr_value=value,
                 )
@@ -102,6 +90,10 @@ class FromJSON(InheritanceFieldMeta):
             dict_repr = json.loads(payload)
             instance = cls.from_dict(dict_repr=dict_repr)
             return instance
+        except TypeError as original_error:
+            if cls.__from_json_custom_exception__ is not None:
+                raise cls.__from_json_custom_exception__(original_error.args[0])
+            raise original_error
         except Exception as original_error:
             if cls.__from_json_custom_exception__ is not None:
                 raise cls.__from_json_custom_exception__(  # pylint: disable=E1102
@@ -118,23 +110,17 @@ class FromJSON(InheritanceFieldMeta):
         _missing = []
 
         for field in cls._with_field_map():
-            attr_not_present = field.name not in dict_repr
-
-            if attr_not_present and field.have_default_value:
+            if field.have_default_value:
                 continue
-
-            if attr_not_present and not field.have_default_value:
+            if field.name not in dict_repr:
                 _missing.append(field.name)
                 continue
 
             attr_value = dict_repr.get(field.name)
-            if attr_value == field.default:
-                continue
-
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
 
             if issubclass(base_type, list | tuple | dict) is False:
-                dict_repr[field.name] = _resolve_type(
+                dict_repr[field.name] = JSONDecoder.type_caster(
                     attr_type=field.annotation, attr_value=attr_value
                 )
 
@@ -154,12 +140,9 @@ class FromJSON(InheritanceFieldMeta):
                 )
 
         if _missing:
-            message = f"Missing content -> The fallow attr are not presente {', '.join(_missing)}"
-            if cls.__from_json_custom_exception__:
-                raise cls.__from_json_custom_exception__(  # pylint: disable=E1102
-                    message
-                )
-            raise TypeError(message)
+            raise TypeError(
+                f"Missing content -> The fallow attr are not presente {', '.join(_missing)}"
+            )
         return cls(**dict_repr)
 
 
@@ -205,6 +188,6 @@ FromJSON.set_decoder_resolver(
 FromJSON.set_decoder_resolver(
     Enum,
     lambda attr_type, value: attr_type(value)
-    if any(value == i.value for i in attr_type)
+    if any(value is i.value for i in attr_type)
     else value,
 )

@@ -41,15 +41,13 @@ class ToJSON(InheritanceFieldMeta):
                 for attr_value_item in attr_value:
                     attr_value_new.append(JSONEncoder.default(attr_value_item))
                 _dict_representation.update({field.name: attr_value_new})
-                continue
-            if isinstance(attr_value, dict):
+            else:
                 attr_value_new = {}
                 for key, value in attr_value.items():
                     attr_value_new.update(
                         {JSONEncoder.default(key): JSONEncoder.default(value)}
                     )
                 _dict_representation.update({field.name: attr_value_new})
-                continue
 
         return _dict_representation
 
