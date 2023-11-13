@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import List, Tuple, Union, Optional, Dict, Coroutine, Callable
+from typing import List, Tuple, Union, Optional, Dict, Coroutine, Callable, Any
 
 import pytest
 
@@ -27,14 +27,15 @@ def simple_attr(request):
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_int: int
             a_bool: bool
             a_str: str
             a_float: float
+            a_any: Any
             a_object: StubInstance
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
@@ -42,6 +43,7 @@ def simple_attr(request):
             a_bool: bool
             a_str: str
             a_float: float
+            a_any: Any
             a_object: StubInstance
 
             def __init__(
@@ -50,12 +52,14 @@ def simple_attr(request):
                 a_bool: bool,
                 a_str: str,
                 a_float: float,
+                a_any: Any,
                 a_object: StubInstance,
             ):
                 self.a_int = a_int
                 self.a_bool = a_bool
                 self.a_str = a_str
                 self.a_float = a_float
+                self.a_any = a_any
                 self.a_object = a_object
                 self.__post_init__()
 
@@ -73,21 +77,24 @@ def test_simple_attr_error(simple_attr):
         a_str = 1.0
         a_float = True
         a_object = E()
+        a_any = any([True, False, "", 1, 0.5])
         simple_attr(
             a_int=a_int,
             a_bool=a_bool,
             a_str=a_str,
             a_float=a_float,
+            a_any=a_any,
             a_object=a_object,
         )
     assert error.type == TypeError
     assert error.value.args == (
-        "Validation Errors:\n    'a_int' : Wrong type! Expected <class 'int'> but giving <class 'str'>\n    "
-        "'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'int'>\n    'a_str' : Wrong type! "
-        "Expected <class 'str'> but giving <class 'float'>\n    'a_float' : Wrong type! Expected <class 'flo"
-        "at'> but giving <class 'bool'>\n    'a_object' : Wrong type! Expected <class 'tests.kobject.validat"
-        "or.test_main.StubInstance'> but giving <class 'tests.kobject.validator.test_main.test_simple_attr_e"
-        "rror.<locals>.E'>\n",
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_int: <class 'int'> != '<class 'str'>'\n"
+        " Wrong type for a_bool: <class 'bool'> != '<class 'int'>'\n"
+        " Wrong type for a_str: <class 'str'> != '<class 'float'>'\n"
+        " Wrong type for a_float: <class 'float'> != '<class 'bool'>'\n"
+        " Wrong type for a_object: <class 'tests.kobject.validator.test_main.StubInstance'> != "
+        "'<class 'tests.kobject.validator.test_main.test_simple_attr_error.<locals>.E'>'",
     )
 
 
@@ -96,18 +103,21 @@ def test_simple_attr(simple_attr):
     a_bool = True
     a_str = "a"
     a_float = 1.0
+    a_any = any([True, False, "", 1, 0.5])
     a_object = StubInstance(a_int=1)
     instance = simple_attr(
         a_int=a_int,
         a_bool=a_bool,
         a_str=a_str,
         a_float=a_float,
+        a_any=a_any,
         a_object=a_object,
     )
     assert instance.a_int == a_int
     assert instance.a_bool == a_bool
     assert instance.a_str == a_str
     assert instance.a_float == a_float
+    assert instance.a_any == a_any
     assert instance.a_object == a_object
 
 
@@ -121,22 +131,28 @@ def attr_with_content(request):
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_list_int: List[int]
             a_tuple_object: Tuple[StubInstance]
+            a_dict_str_optional_int: Dict[str, None | int]
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
             a_list_int: List[int]
             a_tuple_object: Tuple[StubInstance]
+            a_dict_str_optional_int: Dict[str, None | int]
 
             def __init__(
-                self, a_list_int: List[int], a_tuple_object: Tuple[StubInstance]
+                self,
+                a_list_int: List[int],
+                a_tuple_object: Tuple[StubInstance],
+                a_dict_str_optional_int: Dict[str, None | int],
             ):
                 self.a_list_int = a_list_int
                 self.a_tuple_object = a_tuple_object
+                self.a_dict_str_optional_int = a_dict_str_optional_int
                 self.__post_init__()
 
         return StubClass
@@ -151,14 +167,19 @@ def test_attr_with_content_error(attr_with_content):
         a_list_int = [1, 2, "", 3, ""]
         a_object = E()
         a_tuple_object = (a_object,)
-        attr_with_content(a_list_int=a_list_int, a_tuple_object=a_tuple_object)
+        a_dict_str_optional_int = {"str": True, 1: "str", 2: True}
+        attr_with_content(
+            a_list_int=a_list_int,
+            a_tuple_object=a_tuple_object,
+            a_dict_str_optional_int=a_dict_str_optional_int,
+        )
     assert error.type == TypeError
     assert error.value.args == (
-        "Validation Errors:\n"
-        "    'a_list_int' : Wrong type! Expected (<class 'int'>,) but giving <class 'str'> on index 2\n"
-        "    'a_list_int' : Wrong type! Expected (<class 'int'>,) but giving <class 'str'> on index 4\n"
-        "    'a_tuple_object' : Wrong type! Expected (<class 'tests.kobject.validator.test_main.StubInstance'>,)"
-        " but giving <class 'tests.kobject.validator.test_main.test_attr_with_content_error.<locals>.E'> on index 0\n",
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_list_int: typing.List[int] != '<class 'list'>'\n"
+        " Wrong type for a_tuple_object: typing.Tuple[tests.kobject.validator.test_main.StubInstan"
+        "ce] != '<class 'tuple'>'\n"
+        " Wrong type for a_dict_str_optional_int: typing.Dict[str, None | int] != '<class 'dict'>'",
     )
 
 
@@ -166,8 +187,13 @@ def test_attr_with_content(attr_with_content):
     a_list_int = [1, 2, 4, 3, 5]
     a_object = StubInstance(a_int=1)
     a_tuple_object = (a_object,)
+    a_dict_str_optional_int = {"str": 2}
 
-    instance = attr_with_content(a_list_int=a_list_int, a_tuple_object=a_tuple_object)
+    instance = attr_with_content(
+        a_list_int=a_list_int,
+        a_tuple_object=a_tuple_object,
+        a_dict_str_optional_int=a_dict_str_optional_int,
+    )
     assert instance.a_list_int == a_list_int
     assert instance.a_tuple_object == a_tuple_object
 
@@ -182,22 +208,28 @@ def not_real_type_attr(request):
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_union_int_bool: Union[int | bool]
             a_optional_str: Optional[str]
+            a_optional_int: int | None
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
             a_union_int_bool: Union[int | bool]
             a_optional_str: Optional[str]
+            a_optional_int: int | None
 
             def __init__(
-                self, a_union_int_bool: Union[int | bool], a_optional_str: Optional[str]
+                self,
+                a_union_int_bool: Union[int | bool],
+                a_optional_str: Optional[str],
+                a_optional_int: int | None,
             ):
                 self.a_union_int_bool = a_union_int_bool
                 self.a_optional_str = a_optional_str
+                self.a_optional_int = a_optional_int
                 self.__post_init__()
 
         return StubClass
@@ -207,22 +239,29 @@ def test_not_real_type_attr_content_error(not_real_type_attr):
     with pytest.raises(TypeError) as error:
         a_union_int_bool = "a_str"
         a_optional_str = 1
+        a_optional_int = "lala"
         not_real_type_attr(
-            a_union_int_bool=a_union_int_bool, a_optional_str=a_optional_str
+            a_union_int_bool=a_union_int_bool,
+            a_optional_str=a_optional_str,
+            a_optional_int=a_optional_int,
         )
     assert error.type == TypeError
     assert error.value.args == (
-        "Validation Errors:\n"
-        "    'a_union_int_bool' : Wrong type! Expected (<class 'int'>, <class 'bool'>) but giving <class 'str'>\n"
-        "    'a_optional_str' : Wrong type! Expected (<class 'str'>, <class 'NoneType'>) but giving <class 'int'>\n",
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_union_int_bool: typing.Union[int, bool] != '<class 'str'>'\n"
+        " Wrong type for a_optional_str: typing.Optional[str] != '<class 'int'>'\n"
+        " Wrong type for a_optional_int: int | None != '<class 'str'>'",
     )
 
 
 def test_not_real_type_attr_content_set_1(not_real_type_attr):
     a_union_int_bool = 2
     a_optional_str = None
+    a_optional_int = None
     instance = not_real_type_attr(
-        a_union_int_bool=a_union_int_bool, a_optional_str=a_optional_str
+        a_union_int_bool=a_union_int_bool,
+        a_optional_str=a_optional_str,
+        a_optional_int=a_optional_int,
     )
     assert instance.a_union_int_bool == a_union_int_bool
     assert instance.a_optional_str == a_optional_str
@@ -231,8 +270,11 @@ def test_not_real_type_attr_content_set_1(not_real_type_attr):
 def test_not_real_type_attr_content_set_2(not_real_type_attr):
     a_union_int_bool = True
     a_optional_str = "a_str"
+    a_optional_int = 1
     instance = not_real_type_attr(
-        a_union_int_bool=a_union_int_bool, a_optional_str=a_optional_str
+        a_union_int_bool=a_union_int_bool,
+        a_optional_str=a_optional_str,
+        a_optional_int=a_optional_int,
     )
     assert instance.a_union_int_bool == a_union_int_bool
     assert instance.a_optional_str == a_optional_str
@@ -248,12 +290,12 @@ def callables_attr(request):
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_coroutine: Coroutine
             a_callable: Callable
             b_callable: Callable
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
@@ -281,10 +323,10 @@ def test_callables_attr_content_error(callables_attr):
         )
     assert error.type == TypeError
     assert error.value.args == (
-        "Validation Errors:\n"
-        "    'a_coroutine' : Wrong type! Expected <class 'collections.abc.Coroutine'> but giving <class 'int'>\n"
-        "    'a_callable' : Wrong type! Expected <class 'collections.abc.Callable'> but giving <class 'int'>\n"
-        "    'b_callable' : Wrong type! Expected <class 'collections.abc.Callable'> but giving <class 'int'>\n",
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_coroutine: typing.Coroutine != '<class 'int'>'\n"
+        " Wrong type for a_callable: typing.Callable != '<class 'int'>'\n"
+        " Wrong type for b_callable: typing.Callable != '<class 'int'>'",
     )
 
 
@@ -322,11 +364,11 @@ def inception_attr(request):
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_list_union_bool_str: List[Union[bool, str]]
             a_list_optional_int: List[Optional[int]]
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
@@ -366,10 +408,10 @@ def default_attr(request):
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_bool: bool = 2
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
@@ -387,7 +429,8 @@ def test_default_value_attr_error(default_attr):
         default_attr(a_bool="")
     assert error.type == TypeError
     assert error.value.args == (
-        "Validation Errors:\n    'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'str'>\n",
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
     )
 
 
@@ -403,14 +446,14 @@ def test_default_value_attr(default_attr):
     ]
 )
 def custom_exception(request):
-    Kobject.set_custom_exception(None)
+    Kobject.set_validation_custom_exception(None)
     if request.param == ClassType.DATACLASS:
 
         @dataclass
-        class StubDataClass(Kobject):
+        class StubClass(Kobject):
             a_bool: bool
 
-        return StubDataClass
+        return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
@@ -429,9 +472,65 @@ def test_custom_exception(custom_exception):
 
     with pytest.raises(TypeError) as t_error:
         custom_exception(a_bool="")
-    Kobject.set_custom_exception(CustomException)
+    Kobject.set_validation_custom_exception(CustomException)
     with pytest.raises(CustomException) as c_error:
         custom_exception(a_bool="")
-    error_message = "Validation Errors:\n    'a_bool' : Wrong type! Expected <class 'bool'> but giving <class 'str'>\n"
-    assert t_error.value.args[0] == error_message
-    assert c_error.value.args[0] == error_message
+    assert t_error.value.args == (
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+    )
+    assert c_error.value.args == (
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+    )
+
+
+@pytest.fixture(
+    params=[
+        ClassType.DATACLASS,
+        ClassType.DEFAULT,
+    ]
+)
+def lazy_validator(request):
+    Kobject.set_validation_custom_exception(None)
+    if request.param == ClassType.DATACLASS:
+
+        @dataclass
+        class StubClass(Kobject):
+            a_bool: bool
+            b_bool: bool
+
+        return StubClass
+    elif request.param == ClassType.DEFAULT:
+
+        class StubClass(Kobject):
+            a_bool: bool
+            b_bool: bool
+
+            def __init__(self, a_bool: bool, b_bool: bool):
+                self.a_bool = a_bool
+                self.b_bool = b_bool
+                self.__post_init__()
+
+        return StubClass
+
+
+def test_lazy_validator_on(lazy_validator):
+    Kobject.set_lazy_type_check(True)
+    with pytest.raises(TypeError) as t_error:
+        lazy_validator(a_bool="", b_bool="")
+    assert t_error.value.args == (
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+    )
+
+
+def test_lazy_validator_off(lazy_validator):
+    Kobject.set_lazy_type_check(False)
+    with pytest.raises(TypeError) as t_error:
+        lazy_validator(a_bool="", b_bool="")
+    assert t_error.value.args == (
+        "Class 'StubClass' type error:\n"
+        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'\n"
+        " Wrong type for b_bool: <class 'bool'> != '<class 'str'>'",
+    )

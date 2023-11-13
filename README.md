@@ -53,7 +53,7 @@ class StubClass(Kobject):
 
 instance = StubClass(a_int=1, a_bool=True)
 ```
-By default, dataclass calls ```self.__post_init__()``` at the end of the ```__init__``` declaration.
+By default, dataclass calls ```self.__post_init__()``` at the end of the ```__init__``` declaration [doc](https://docs.python.org/3/library/dataclasses.html#dataclasses.__post_init__). 
 
 
 ### Exception
@@ -74,17 +74,18 @@ instance = StubClass(a_list_int=[1, "", 2, ""], a_tuple_bool=["", True])
 ```
 ```bash
 Traceback (most recent call last):
-  File "/snap/pycharm-community/312/plugins/python-ce/helpers/pydev/pydevconsole.py", line 364, in runcode
-    coro = func()
-  File "<input>", line 10, in <module>
-  File "<string>", line 5, in __init__
-  File "/home/marco/projects/kobject/kobject/__init__.py", line 67, in __post_init__
-    raise TypeError(message)
-TypeError: Validation Errors:
-    'a_list_int' : Wrong type! Expected (<class 'int'>,) but giving <class 'str'> on index 1
-    'a_list_int' : Wrong type! Expected (<class 'int'>,) but giving <class 'str'> on index 3
-    'a_tuple_bool' : Wrong type! Expected <class 'tuple'> but giving <class 'list'>
-    'a_tuple_bool' : Wrong type! Expected (<class 'bool'>,) but giving <class 'str'> on index 0
+...
+TypeError: Class 'StubClass' type error:
+ Wrong type for a_list_int: typing.List[int] != '<class 'list'>'
+ Wrong type for a_tuple_bool: typing.Tuple[bool] != '<class 'list'>'
+```
+
+You can use lazy validation to improve performance, the code will stop in the first found error for this use
+
+```python
+from kobject import Kobject
+
+Kobject.set_lazy_type_check(status=True)
 ```
 
 ### Default value
@@ -98,46 +99,43 @@ from kobject import Kobject
 class StubClass(Kobject):
     a_bool: bool = None
 
-    def __init__(self, a_bool: bool = 2):
+    def __init__(self, a_bool: bool = 10):
         self.a_bool = a_bool
         self.__post_init__()
 
 @dataclass
 class StubDataClass(Kobject):
-    a_bool: bool = None
+    a_bool: bool = 10
 ```
 
 ### Custom exception
 
-By default Kobject raise a ```TypeError``` but you can override this exception using ```set_custom_exception```
+By default, Kobject raise a ```TypeError``` but you can override this exception using `set_validation_custom_exception` for type validation or `set_content_check_custom_exception` for field check on from JSON operation.
 
 ```python
 from dataclasses import dataclass
 from kobject import Kobject
 
+
 class CustomException(Exception):
     pass
 
 
-Kobject.set_custom_exception(CustomException)
-
+Kobject.set_validation_custom_exception(CustomException)
+#Kobject.set_content_check_custom_exception(CustomException)
 
 @dataclass
 class StubClass(Kobject):
     a__int: int
 
+
 instance = StubClass(a__int="")
 ```
 ```bash
 Traceback (most recent call last):
-  File "/snap/pycharm-community/312/plugins/python-ce/helpers/pydev/pydevconsole.py", line 364, in runcode
-    coro = func()
-  File "<input>", line 15, in <module>
-  File "<string>", line 4, in __init__
-  File "/home/marco/projects/kobject/kobject/__init__.py", line 79, in __post_init__
-    raise exception(message)
-__main__.CustomException: Validation Errors:
-    'a__int' : Wrong type! Expected <class 'int'> but giving <class 'str'>
+...
+CustomException: Class 'StubClass' type error:
+ Wrong type for a__int: <class 'int'> != '<class 'str'>'
 ```
 
 ### ToJSON
@@ -148,10 +146,10 @@ Kobject has his own implementation to parse class instance to a JSON representat
 from dataclasses import dataclass
 from typing import List, Tuple
 
-from kobject import Kobject, ToJSON
+from kobject import Kobject
     
 @dataclass
-class BaseC(Kobject, ToJSON):
+class BaseC(Kobject):
     a_int: int
     a_str: str
     a_list_of_int: List[int]
@@ -180,11 +178,11 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from kobject import Kobject, ToJSON, FromJSON
+from kobject import Kobject, ToJSON
 
 
 @dataclass
-class BaseA(Kobject, ToJSON):
+class BaseA(Kobject):
     a_datetime: datetime
 
 
@@ -194,7 +192,7 @@ class BaseB:
 
 
 @dataclass
-class BaseC(Kobject, ToJSON, FromJSON):
+class BaseC(Kobject):
     a_base_a: BaseA
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
@@ -225,11 +223,10 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 from kobject import Kobject
-from kobject.from_json import FromJSON
 
 
 @dataclass
-class BaseC(Kobject, FromJSON):
+class BaseC(Kobject):
     a_int: int
     a_str: str
     a_list_of_int: List[int]
@@ -260,7 +257,7 @@ from kobject.from_json import FromJSON
 
 
 @dataclass
-class BaseA(Kobject, FromJSON):
+class BaseA(Kobject):
     a_datetime: datetime
 
 
@@ -270,7 +267,7 @@ class BaseB:
 
 
 @dataclass
-class BaseC(Kobject, FromJSON):
+class BaseC(Kobject):
     a_base_a: BaseA
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
