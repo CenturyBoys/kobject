@@ -110,13 +110,14 @@ class FromJSON(InheritanceFieldMeta):
         _missing = []
 
         for field in cls._with_field_map():
-            if field.have_default_value:
+            attr_value = dict_repr.get(field.name)
+            _is_missing = field.name not in dict_repr
+            if _is_missing and field.have_default_value:
                 continue
-            if field.name not in dict_repr:
+            if _is_missing:
                 _missing.append(field.name)
                 continue
 
-            attr_value = dict_repr.get(field.name)
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
 
             if issubclass(base_type, list | tuple | dict) is False:
@@ -188,6 +189,6 @@ FromJSON.set_decoder_resolver(
 FromJSON.set_decoder_resolver(
     Enum,
     lambda attr_type, value: attr_type(value)
-    if any(value is i.value for i in attr_type)
+    if any(value.__eq__(i.value) for i in attr_type)  # pylint: disable=C2801
     else value,
 )
