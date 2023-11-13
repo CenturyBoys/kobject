@@ -56,6 +56,7 @@ class StubEnum(Enum):
 @dataclass
 class BaseF(Kobject):
     a_stub_enum: StubEnum
+    b_stub_enum: StubEnum = None
 
 
 class BaseG(Kobject):
@@ -204,6 +205,18 @@ def test_from_json_error_enum_invalid_value():
         "Class 'BaseF' type error:\n"
         " Wrong type for a_stub_enum: <enum 'StubEnum'> != '<class 'int'>'",
     )
+
+
+def test_from_json_enum_with_default_value():
+    obj = BaseF.from_json(payload=b'{"a_stub_enum": 1,"b_stub_enum": 1}')
+    assert obj.a_stub_enum == StubEnum.LORO
+    assert obj.b_stub_enum == StubEnum.LORO
+
+
+def test_from_json_enum_with_default_value_set():
+    obj = BaseF.from_json(payload=b'{"a_stub_enum": 1}')
+    assert obj.a_stub_enum == StubEnum.LORO
+    assert obj.b_stub_enum == None
 
 
 def test_from_json_tuple_invalid_value():
