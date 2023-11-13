@@ -200,7 +200,7 @@ def test_from_json_wrong_type_list():
 
 def test_from_json_error_enum_invalid_value():
     with pytest.raises(TypeError) as error:
-        BaseF.from_json(payload=b'{"a_stub_enum": 2}')
+        BaseF.from_json(payload=b'{"a_stub_enum": 2,"b_stub_enum": null}')
     assert error.value.args == (
         "Class 'BaseF' type error:\n"
         " Wrong type for a_stub_enum: <enum 'StubEnum'> != '<class 'int'>'",
