@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 
-from kobject import Kobject, FromJSON
+from kobject import Kobject
 
 
 @dataclass
@@ -78,18 +78,18 @@ def test_from_json_error_default_exception():
 
 
 def test_from_json_error_custom_exception():
-    FromJSON.set_content_check_custom_exception(Exception)
+    Kobject.set_content_check_custom_exception(Exception)
     with pytest.raises(Exception) as error:
         BaseC.from_json(payload=b"{")
     assert error.value.args == ("Invalid content -> b'{'",)
-    FromJSON.set_content_check_custom_exception(None)
+    Kobject.set_content_check_custom_exception(None)
 
 
 def test_from_json_unable_to_cast():
     class MyException(Exception):
         pass
 
-    FromJSON.set_content_check_custom_exception(MyException)
+    Kobject.set_content_check_custom_exception(MyException)
     payload = (
         b'{"a_int": 1,"a_str": "lala","a_list_of_int": [1,2,3],'
         b'"a_tuple_of_bool": [true],"a_base_a": {"a_date'
@@ -103,17 +103,17 @@ def test_from_json_unable_to_cast():
     assert error.value.args == (
         "Class 'BaseA' type error:\n Wrong type for a_datetime: <class 'datetime.datetime'> != '<class 'str'>'",
     )
-    FromJSON.set_content_check_custom_exception(Exception)
+    Kobject.set_content_check_custom_exception(Exception)
 
 
 def test_from_json():
-    FromJSON.set_decoder_resolver(
+    Kobject.set_decoder_resolver(
         datetime.datetime,
         lambda attr_type, value: datetime.datetime.fromisoformat(value)
         if isinstance(value, str)
         else value,
     )
-    FromJSON.set_decoder_resolver(
+    Kobject.set_decoder_resolver(
         BaseB,
         lambda attr_type, value: attr_type(a_uuid=UUID(value["a_uuid"]))
         if isinstance(value, dict)
@@ -138,18 +138,18 @@ def test_from_json_empty_payload_custom_exception():
     class MyException(Exception):
         pass
 
-    FromJSON.set_content_check_custom_exception(MyException)
+    Kobject.set_content_check_custom_exception(MyException)
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
         "Missing content -> The fallow attr are not presente a_int, a_str, "
         "a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_base_a",
     )
-    FromJSON.set_content_check_custom_exception(None)
+    Kobject.set_content_check_custom_exception(None)
 
 
 def test_from_json_empty_payload():
-    FromJSON.set_content_check_custom_exception(None)
+    Kobject.set_content_check_custom_exception(None)
     with pytest.raises(TypeError) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
@@ -230,7 +230,7 @@ def test_from_json_tuple_invalid_value():
 
 
 def test_from_json_tuple_and_dict_cast():
-    FromJSON.set_decoder_resolver(
+    Kobject.set_decoder_resolver(
         BaseB,
         lambda attr_type, value: attr_type(a_uuid=UUID(value["a_uuid"]))
         if isinstance(value, dict)
