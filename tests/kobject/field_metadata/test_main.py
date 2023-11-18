@@ -4,7 +4,7 @@ from typing import List
 
 import pytest
 
-from kobject.common import FieldMeta, InheritanceFieldMeta
+from kobject.validator import FieldMeta, Kobject
 
 
 def test_slots_frozen():
@@ -43,7 +43,7 @@ def test_get_generic_field_meta():
 
 def test__with_field_map():
     @dataclass
-    class A(InheritanceFieldMeta):
+    class A(Kobject):
         a_int: int
 
     obj = A(10)
