@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Tuple, Dict
 from uuid import UUID
 
-from kobject import Kobject, ToJSON
+from kobject import Kobject
 
 
 @dataclass
@@ -29,8 +29,8 @@ class BaseC(Kobject):
 
 
 def test_to_dict():
-    ToJSON.set_encoder_resolver(datetime, lambda value: str(value))
-    ToJSON.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
+    Kobject.set_encoder_resolver(datetime, lambda value: str(value))
+    Kobject.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
     instance = BaseC(
         a_int=1,
         a_str="lala",
@@ -59,8 +59,8 @@ def test_to_dict():
 
 
 def test_from_json():
-    ToJSON.set_encoder_resolver(datetime, lambda value: str(value))
-    ToJSON.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
+    Kobject.set_encoder_resolver(datetime, lambda value: str(value))
+    Kobject.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
     instance = BaseC(
         a_int=1,
         a_str="lala",
@@ -74,11 +74,11 @@ def test_from_json():
         a_dict_str_b={"a": BaseB(a_uuid=UUID("1d9cf695-c917-49ce-854b-4063f0cda2e7"))},
     )
     json_payload = (
-        b'{"a_int": 1, "a_str": "lala", "a_list_of_int": [1, 2, 3], "a_tuple_of_bool": [true]'
-        b', "a_base_a": {"a_datetime": "2023-02-01 17:38:45.389426"}, "a_base_b": {"a_uuid": '
-        b'"1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_list_of_base_a": [{"a_datetime": "2023-'
-        b'02-01 17:38:45.389426"}], "a_dict_str_b": {"a": {"a_uuid": "1d9cf695-c917-49ce-854b'
-        b'-4063f0cda2e7"}}}'
+        b'{"a_int":1,"a_str":"lala","a_list_of_int":[1,2,3],"a_tuple_of_bool":[true],'
+        b'"a_base_a":{"a_datetime":"2023-02-01 17:38:45.389426"},"a_base_b":{"a_uuid"'
+        b':"1d9cf695-c917-49ce-854b-4063f0cda2e7"},"a_list_of_base_a":[{"a_datetime":'
+        b'"2023-02-01 17:38:45.389426"}],"a_dict_str_b":{"a":{"a_uuid":"1d9cf695-c917'
+        b'-49ce-854b-4063f0cda2e7"}}}'
     )
     json_bytes = instance.to_json()
     assert json_bytes == json_payload

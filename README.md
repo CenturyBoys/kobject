@@ -178,7 +178,7 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from kobject import Kobject, ToJSON
+from kobject import Kobject
 
 
 @dataclass
@@ -197,8 +197,8 @@ class BaseC(Kobject):
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
 
-ToJSON.set_encoder_resolver(datetime, lambda value: str(value))
-ToJSON.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
+Kobject.set_encoder_resolver(datetime, lambda value: str(value))
+Kobject.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
 
 instance = BaseC(
     a_base_a=BaseA(a_datetime=datetime.fromisoformat("2023-02-01 17:38:45.389426")),
@@ -253,7 +253,6 @@ from typing import List
 from uuid import UUID
 
 from kobject import Kobject
-from kobject.from_json import FromJSON
 
 
 @dataclass
@@ -272,13 +271,13 @@ class BaseC(Kobject):
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
 
-FromJSON.set_decoder_resolver(
+Kobject.set_decoder_resolver(
     datetime,
     lambda attr_type, value: datetime.fromisoformat(value)
     if isinstance(value, str)
     else value,
 )
-FromJSON.set_decoder_resolver(
+Kobject.set_decoder_resolver(
     BaseB,
     lambda attr_type, value: attr_type(a_uuid=UUID(value["a_uuid"]))
     if isinstance(value, dict)
