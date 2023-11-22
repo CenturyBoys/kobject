@@ -88,6 +88,9 @@ def _validate_dict(field: FieldMeta, value: Any) -> bool:
 
 
 def _validate_tuple_list(field: FieldMeta, value: Any) -> bool:
+    total_args = len(field.annotation.__args__)
+    if total_args > 1 and total_args != len(value):
+        return False
     for item in value:
         is_item_valid = False
         for type_options in field.annotation.__args__:

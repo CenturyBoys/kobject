@@ -133,6 +133,7 @@ def attr_with_content(request):
         @dataclass
         class StubClass(Kobject):
             a_list_int: List[int]
+            a_list_exactly_two_floats: list[float, float]
             a_tuple_object: Tuple[StubInstance]
             a_dict_str_optional_int: Dict[str, None | int]
 
@@ -141,16 +142,19 @@ def attr_with_content(request):
 
         class StubClass(Kobject):
             a_list_int: List[int]
+            a_list_exactly_two_floats: list[float, float]
             a_tuple_object: Tuple[StubInstance]
             a_dict_str_optional_int: Dict[str, None | int]
 
             def __init__(
                 self,
                 a_list_int: List[int],
+                a_list_exactly_two_floats: list[float, float],
                 a_tuple_object: Tuple[StubInstance],
                 a_dict_str_optional_int: Dict[str, None | int],
             ):
                 self.a_list_int = a_list_int
+                self.a_list_exactly_two_floats = a_list_exactly_two_floats
                 self.a_tuple_object = a_tuple_object
                 self.a_dict_str_optional_int = a_dict_str_optional_int
                 self.__post_init__()
@@ -165,11 +169,13 @@ def test_attr_with_content_error(attr_with_content):
             pass
 
         a_list_int = [1, 2, "", 3, ""]
+        a_list_exactly_two_floats = [1.,]
         a_object = E()
         a_tuple_object = (a_object,)
         a_dict_str_optional_int = {"str": True, 1: "str", 2: True}
         attr_with_content(
             a_list_int=a_list_int,
+            a_list_exactly_two_floats=a_list_exactly_two_floats,
             a_tuple_object=a_tuple_object,
             a_dict_str_optional_int=a_dict_str_optional_int,
         )
@@ -177,6 +183,7 @@ def test_attr_with_content_error(attr_with_content):
     assert error.value.args == (
         "Class 'StubClass' type error:\n"
         " Wrong type for a_list_int: typing.List[int] != '<class 'list'>'\n"
+        " Wrong type for a_list_exactly_two_floats: list[float, float] != '<class 'list'>'\n"
         " Wrong type for a_tuple_object: typing.Tuple[tests.kobject.validator.test_main.StubInstan"
         "ce] != '<class 'tuple'>'\n"
         " Wrong type for a_dict_str_optional_int: typing.Dict[str, None | int] != '<class 'dict'>'",
@@ -185,12 +192,14 @@ def test_attr_with_content_error(attr_with_content):
 
 def test_attr_with_content(attr_with_content):
     a_list_int = [1, 2, 4, 3, 5]
+    a_list_exactly_two_floats = [1., 2.]
     a_object = StubInstance(a_int=1)
     a_tuple_object = (a_object,)
     a_dict_str_optional_int = {"str": 2}
 
     instance = attr_with_content(
         a_list_int=a_list_int,
+        a_list_exactly_two_floats=a_list_exactly_two_floats,
         a_tuple_object=a_tuple_object,
         a_dict_str_optional_int=a_dict_str_optional_int,
     )
