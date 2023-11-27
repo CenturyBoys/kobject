@@ -87,7 +87,27 @@ def _validate_dict(field: FieldMeta, value: Any) -> bool:
     return True
 
 
-def _validate_tuple_list(field: FieldMeta, value: Any) -> bool:
+def _validate_tuple(field: FieldMeta, value: Any) -> bool:
+    if len(field.annotation.__args__) != len(value):
+        return False
+
+    for item in value:
+        is_item_valid = False
+        for type_options in field.annotation.__args__:
+            if (
+                _validate_field_value(
+                    item, FieldMeta.get_generic_field_meta(type_options)
+                )
+                is True
+            ):
+                is_item_valid = not is_item_valid
+                break
+        if is_item_valid is False:
+            return is_item_valid
+    return True
+
+
+def _validate_list(field: FieldMeta, value: Any) -> bool:
     for item in value:
         is_item_valid = False
         for type_options in field.annotation.__args__:
@@ -132,8 +152,11 @@ def _validate_field_value(value: Any, field: FieldMeta) -> bool:
     elif issubclass(field.annotation.__origin__, dict):
         _is_valid = _validate_dict(field, value)
 
+    elif issubclass(field.annotation.__origin__, list):
+        _is_valid = _validate_list(field, value)
+
     else:
-        _is_valid = _validate_tuple_list(field, value)
+        _is_valid = _validate_tuple(field, value)
 
     assert isinstance(_is_valid, bool)
 
