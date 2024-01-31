@@ -209,6 +209,74 @@ def _resolve_dict(_type: Type, attr_value: Any):
     return attr_value_new
 
 
+class JSONDecoder:
+    """
+    Implementation tyo decode json in to class instance inspired by json.JSONEncoder
+    """
+
+    types_resolver = []
+
+    @staticmethod
+    def get_base_type(attr_type):
+        """
+        Returns the base type if the parameter attr_type has __original__ attribute
+        """
+        if hasattr(attr_type, "__origin__"):
+            attr_type = attr_type.__origin__
+        return attr_type
+
+    @classmethod
+    def type_caster(cls, attr_type, attr_value):  # pylint: disable=R1710
+        """
+        Returns the result of cast attribute type for the attribute type
+        """
+        for map_attr_type, resolver in cls.types_resolver:
+            if isclass(attr_type) and issubclass(attr_type, map_attr_type):
+                return resolver(attr_type, attr_value)
+        return attr_value
+
+
+class JSONEncoder(json.JSONEncoder):
+    """
+    Self implementation for default json.JSONEncoder
+    """
+
+    base_types_resolver = {}
+
+    @staticmethod
+    def get_type(attr_type):
+        """
+        Returns the type or subtypes of giving attribute type
+        """
+        attr_type = attr_type.__origin__
+        return attr_type
+
+    @classmethod
+    def default(cls, obj):  # pylint: disable=W0221
+        """
+        Resolve object to json parsable dict using registered resolvers,
+        excluding on_dict option. Kobject.set_encoder_resolver()
+        """
+        if isinstance(obj, Kobject):
+            return obj.dict()
+        for map_attr_type, resolver in cls.base_types_resolver.items():
+            if isinstance(obj, map_attr_type):
+                return resolver[0](obj)
+        return obj
+
+    @classmethod
+    def dict_default(cls, obj):  # pylint: disable=W0221
+        """
+        Resolve object to a dict using registered resolvers. Kobject.set_encoder_resolver()
+        """
+        if isinstance(obj, Kobject):
+            return obj.dict()
+        for map_attr_type, resolver in cls.base_types_resolver.items():
+            if isinstance(obj, map_attr_type) and resolver[1]:
+                return resolver[0](obj)
+        return obj
+
+
 class Kobject:
     """Just use it."""
 
@@ -294,14 +362,19 @@ class Kobject:
         JSONDecoder.types_resolver.insert(0, (attr_type, resolver_callback))
 
     @staticmethod
-    def set_encoder_resolver(attr_type, resolver_callback: Callable):
+    def set_encoder_resolver(
+        attr_type, resolver_callback: Callable, on_dict: bool = True
+    ):
         """
         Register a resolver for a class or subclass
         attr_type: int,str,bool,float or any other class
         resolver_callback: lambda function that receives the value to be cast.
+        on_dict: bool if this encoder must be called on dict() function two.
          Example 'lambda value: value'
         """
-        JSONEncoder.base_types_resolver.update({attr_type: resolver_callback})
+        JSONEncoder.base_types_resolver.update(
+            {attr_type: [resolver_callback, on_dict]}
+        )
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -386,88 +459,35 @@ class Kobject:
         """
         Returns dict representation of your object
         """
-        _dict_representation = {}
-
-        for field in self._with_field_map():
-            attr_value = getattr(self, field.name)
-            if not isinstance(attr_value, list | tuple | dict):
-                _dict_representation.update(
-                    {field.name: JSONEncoder.default(attr_value)}
-                )
-                continue
-            if isinstance(attr_value, list | tuple):
-                attr_value_new = []
-                for attr_value_item in attr_value:
-                    attr_value_new.append(JSONEncoder.default(attr_value_item))
-                _dict_representation.update({field.name: attr_value_new})
-            else:
-                attr_value_new = {}
-                for key, value in attr_value.items():
-                    attr_value_new.update(
-                        {JSONEncoder.default(key): JSONEncoder.default(value)}
-                    )
-                _dict_representation.update({field.name: attr_value_new})
-
-        return _dict_representation
+        return self._dict(resolver=JSONEncoder.dict_default)
 
     def to_json(self) -> bytes:
         """
         Returns json of your object
         """
-        dict_repr = self.dict()
+        dict_repr = self._dict(resolver=JSONEncoder.default)
         json_bytes = json.dumps(
             dict_repr, default=JSONEncoder.default, separators=(",", ":")
         )
         return json_bytes.encode()
 
+    def _dict(self, resolver: Callable[[any], any]):
+        _dict_representation = {}
 
-class JSONDecoder:
-    """
-    Implementation tyo decode json in to class instance inspired by json.JSONEncoder
-    """
+        for field in self._with_field_map():
+            attr_value = getattr(self, field.name)
+            if not isinstance(attr_value, list | tuple | dict):
+                _dict_representation.update({field.name: resolver(attr_value)})
+                continue
+            if isinstance(attr_value, list | tuple):
+                attr_value_new = []
+                for attr_value_item in attr_value:
+                    attr_value_new.append(resolver(attr_value_item))
+                _dict_representation.update({field.name: attr_value_new})
+            else:
+                attr_value_new = {}
+                for key, value in attr_value.items():
+                    attr_value_new.update({resolver(key): resolver(value)})
+                _dict_representation.update({field.name: attr_value_new})
 
-    types_resolver = []
-
-    @staticmethod
-    def get_base_type(attr_type):
-        """
-        Returns the base type if the parameter attr_type has __original__ attribute
-        """
-        if hasattr(attr_type, "__origin__"):
-            attr_type = attr_type.__origin__
-        return attr_type
-
-    @classmethod
-    def type_caster(cls, attr_type, attr_value):  # pylint: disable=R1710
-        """
-        Returns the result of cast attribute type for the attribute type
-        """
-        for map_attr_type, resolver in cls.types_resolver:
-            if isclass(attr_type) and issubclass(attr_type, map_attr_type):
-                return resolver(attr_type, attr_value)
-        return attr_value
-
-
-class JSONEncoder(json.JSONEncoder):
-    """
-    Self implementation for default json.JSONEncoder
-    """
-
-    base_types_resolver = {}
-
-    @staticmethod
-    def get_type(attr_type):
-        """
-        Returns the type or subtypes of giving attribute type
-        """
-        attr_type = attr_type.__origin__
-        return attr_type
-
-    @classmethod
-    def default(cls, obj):  # pylint: disable=W0221
-        if isinstance(obj, Kobject):
-            return obj.dict()
-        for map_attr_type, resolver in cls.base_types_resolver.items():
-            if isinstance(obj, map_attr_type):
-                return resolver(obj)
-        return obj
+        return _dict_representation
