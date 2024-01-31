@@ -82,3 +82,13 @@ def test_from_json():
     )
     json_bytes = instance.to_json()
     assert json_bytes == json_payload
+
+
+def test_on_dict():
+    Kobject.set_encoder_resolver(datetime, lambda value: str(value))
+    instance = BaseA(a_datetime=datetime.fromisoformat("2023-02-01 17:38:45.389426"))
+    a_dict_repr = instance.dict()
+    Kobject.set_encoder_resolver(datetime, lambda value: str(value), on_dict=False)
+    b_dict_repr = instance.dict()
+    assert isinstance(a_dict_repr["a_datetime"], str)
+    assert isinstance(b_dict_repr["a_datetime"], datetime)
