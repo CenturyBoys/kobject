@@ -32,6 +32,7 @@ def simple_attr(request):
             a_bool: bool
             a_str: str
             a_float: float
+            a_dict: dict
             a_any: Any
             a_object: StubInstance
 
@@ -43,6 +44,7 @@ def simple_attr(request):
             a_bool: bool
             a_str: str
             a_float: float
+            a_dict: dict
             a_any: Any
             a_object: StubInstance
 
@@ -52,6 +54,7 @@ def simple_attr(request):
                 a_bool: bool,
                 a_str: str,
                 a_float: float,
+                a_dict: dict,
                 a_any: Any,
                 a_object: StubInstance,
             ):
@@ -59,6 +62,7 @@ def simple_attr(request):
                 self.a_bool = a_bool
                 self.a_str = a_str
                 self.a_float = a_float
+                self.a_dict = a_dict
                 self.a_any = a_any
                 self.a_object = a_object
                 self.__post_init__()
@@ -76,6 +80,7 @@ def test_simple_attr_error(simple_attr):
         a_bool = 2
         a_str = 1.0
         a_float = True
+        a_dict = True
         a_object = E()
         a_any = any([True, False, "", 1, 0.5])
         simple_attr(
@@ -83,6 +88,7 @@ def test_simple_attr_error(simple_attr):
             a_bool=a_bool,
             a_str=a_str,
             a_float=a_float,
+            a_dict=a_dict,
             a_any=a_any,
             a_object=a_object,
         )
@@ -93,6 +99,7 @@ def test_simple_attr_error(simple_attr):
         " Wrong type for a_bool: <class 'bool'> != '<class 'int'>'\n"
         " Wrong type for a_str: <class 'str'> != '<class 'float'>'\n"
         " Wrong type for a_float: <class 'float'> != '<class 'bool'>'\n"
+        " Wrong type for a_dict: <class 'dict'> != '<class 'bool'>'\n"
         " Wrong type for a_object: <class 'tests.kobject.validator.test_main.StubInstance'> != "
         "'<class 'tests.kobject.validator.test_main.test_simple_attr_error.<locals>.E'>'",
     )
@@ -103,6 +110,7 @@ def test_simple_attr(simple_attr):
     a_bool = True
     a_str = "a"
     a_float = 1.0
+    a_dict = {}
     a_any = any([True, False, "", 1, 0.5])
     a_object = StubInstance(a_int=1)
     instance = simple_attr(
@@ -110,6 +118,7 @@ def test_simple_attr(simple_attr):
         a_bool=a_bool,
         a_str=a_str,
         a_float=a_float,
+        a_dict=a_dict,
         a_any=a_any,
         a_object=a_object,
     )
@@ -117,6 +126,7 @@ def test_simple_attr(simple_attr):
     assert instance.a_bool == a_bool
     assert instance.a_str == a_str
     assert instance.a_float == a_float
+    assert instance.a_dict == a_dict
     assert instance.a_any == a_any
     assert instance.a_object == a_object
 

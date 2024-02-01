@@ -193,6 +193,10 @@ def _resolve_tuple(_type: Type, attr_value: Any):
 
 
 def _resolve_dict(_type: Type, attr_value: Any):
+    _typed_dict = hasattr(_type, "__args__")
+    if not _typed_dict:
+        return attr_value
+
     attr_value_new = {}
     for key, value in attr_value.items():
         attr_value_new.update(
@@ -414,7 +418,7 @@ class Kobject:
         """
 
         _missing = []
-
+        _dict_repr = {}
         for field in cls._with_field_map():
             attr_value = dict_repr.get(field.name)
             _is_missing = field.name not in dict_repr
@@ -424,28 +428,29 @@ class Kobject:
                 _missing.append(field.name)
                 continue
 
+            _dict_repr.update({field.name: attr_value})
             if attr_value == field.default:
                 continue
 
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
 
             if issubclass(base_type, list | tuple | dict) is False:
-                dict_repr[field.name] = JSONDecoder.type_caster(
+                _dict_repr[field.name] = JSONDecoder.type_caster(
                     attr_type=field.annotation, attr_value=attr_value
                 )
 
             elif issubclass(base_type, list) and isinstance(attr_value, list):
-                dict_repr[field.name] = _resolve_list(
+                _dict_repr[field.name] = _resolve_list(
                     _type=field.annotation, attr_value=attr_value
                 )
 
             elif issubclass(base_type, tuple) and isinstance(attr_value, list):
-                dict_repr[field.name] = _resolve_tuple(
+                _dict_repr[field.name] = _resolve_tuple(
                     _type=field.annotation, attr_value=attr_value
                 )
 
             elif issubclass(base_type, dict) and isinstance(attr_value, dict):
-                dict_repr[field.name] = _resolve_dict(
+                _dict_repr[field.name] = _resolve_dict(
                     _type=field.annotation, attr_value=attr_value
                 )
 
@@ -453,7 +458,7 @@ class Kobject:
             raise TypeError(
                 f"Missing content -> The fallow attr are not presente {', '.join(_missing)}"
             )
-        return cls(**dict_repr)
+        return cls(**_dict_repr)
 
     def dict(self):
         """
