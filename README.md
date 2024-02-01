@@ -170,7 +170,9 @@ print(json_bytes)
 b'{"a_int": 1, "a_str": "lala", "a_list_of_int": [1, 2, 3], "a_tuple_of_bool": [true]}'
 ```
 
-For complex values ToJSON expose ```set_encoder_resolver``` to handler it.
+For complex values ToJSON expose ```set_encoder_resolver``` to handler it. 
+
+Notest, Before encoding the object to JSON bytes, it will be represented by `self.dict()`. Some objects, such as `datetime.datetime`, can be useful in dictionary structures but are not JSON serializable. In such cases, you can use the `on_dict: bool` parameter in the `Kobject.set_encoder_resolver()` method to encode only when JSON bytes are required, not in its dictionary representation.
 
 ```python
 from dataclasses import dataclass
@@ -197,7 +199,7 @@ class BaseC(Kobject):
     a_base_b: BaseB
     a_list_of_base_a: List[BaseA]
 
-Kobject.set_encoder_resolver(datetime, lambda value: str(value))
+Kobject.set_encoder_resolver(datetime, lambda value: str(value), False)
 Kobject.set_encoder_resolver(BaseB, lambda value: {"a_uuid": str(value.a_uuid)})
 
 instance = BaseC(
@@ -205,6 +207,10 @@ instance = BaseC(
     a_base_b=BaseB(a_uuid=UUID("1d9cf695-c917-49ce-854b-4063f0cda2e7")),
     a_list_of_base_a=[BaseA(a_datetime=datetime.fromisoformat("2023-02-01 17:38:45.389426"))]
 )
+
+dict_repr = instance.dict()
+
+isinstance(dict_repr["a_base_a"]["a_datetime"], datetime)
 
 json_bytes = instance.to_json()
 
@@ -216,7 +222,7 @@ b'{"a_base_a": {"a_datetime": "2023-02-01 17:38:45.389426"}, "a_base_b": {"a_uui
 
 ### FromJSON
 
-Kobject has his own implementation to parse JSON to a class instance. 
+Kobject has his own implementation to parse JSON to a class instance.
 
 ```python
 from dataclasses import dataclass
