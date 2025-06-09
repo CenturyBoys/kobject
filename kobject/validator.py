@@ -1,12 +1,24 @@
 """
 Know your object a __init__ type validator
 """
+
 import json
 from dataclasses import dataclass
 from inspect import _empty, Signature, isclass
-from types import GenericAlias
-from typing import Type, Any, TypeVar, List, Dict, _GenericAlias, _SpecialForm, Callable
-
+import types
+from typing import (
+    Type,
+    Any,
+    TypeVar,
+    List,
+    Dict,
+    _GenericAlias,
+    _SpecialForm,
+    Callable,
+    Union,
+    get_origin,
+    get_args,
+)
 
 T = TypeVar("T")
 __base_any_type__ = {}
@@ -137,7 +149,7 @@ def _validate_field_value(value: Any, field: FieldMeta) -> bool:
     elif field.annotation in (Ellipsis, Any):
         _is_valid = True
 
-    elif isinstance(field.annotation, GenericAlias | _GenericAlias) is False:
+    elif isinstance(field.annotation, types.GenericAlias | _GenericAlias) is False:
         _is_valid = isinstance(value, field.annotation)
 
     elif isinstance(field.annotation.__origin__, _SpecialForm):
@@ -193,10 +205,6 @@ def _resolve_tuple(_type: Type, attr_value: Any):
 
 
 def _resolve_dict(_type: Type, attr_value: Any):
-    _typed_dict = hasattr(_type, "__args__")
-    if not _typed_dict:
-        return attr_value
-
     attr_value_new = {}
     for key, value in attr_value.items():
         attr_value_new.update(
@@ -211,6 +219,19 @@ def _resolve_dict(_type: Type, attr_value: Any):
             }
         )
     return attr_value_new
+
+
+def is_union(attr_type: type | Type) -> bool:
+    return get_origin(attr_type) is Union or isinstance(attr_type, types.UnionType)
+
+
+def _checker(attr_type: type | Type, reference: type | Type | types.UnionType) -> bool:
+    if is_union(attr_type):
+        return any(
+            isinstance(t, type) and issubclass(t, reference)
+            for t in get_args(attr_type)
+        )
+    return isclass(attr_type) and issubclass(attr_type, reference)
 
 
 class JSONDecoder:
@@ -235,7 +256,10 @@ class JSONDecoder:
         Returns the result of cast attribute type for the attribute type
         """
         for map_attr_type, resolver in cls.types_resolver:
-            if isclass(attr_type) and issubclass(attr_type, map_attr_type):
+            if _checker(attr_type, map_attr_type):
+                for _type in get_args(attr_type):
+                    if issubclass(_type, map_attr_type):
+                        return resolver(_type, attr_value)
                 return resolver(attr_type, attr_value)
         return attr_value
 
@@ -329,7 +353,8 @@ class Kobject:
                 exception = TypeError
             raise exception(
                 "Class '{}' type error:\n {}".format(
-                    self.__class__.__name__, "\n ".join(_errors), values=self.__dict__
+                    self.__class__.__name__,
+                    "\n ".join(_errors),
                 )
             )
 
@@ -434,22 +459,22 @@ class Kobject:
 
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
 
-            if issubclass(base_type, list | tuple | dict) is False:
+            if _checker(base_type, list | tuple | dict) is False:
                 _dict_repr[field.name] = JSONDecoder.type_caster(
                     attr_type=field.annotation, attr_value=attr_value
                 )
 
-            elif issubclass(base_type, list) and isinstance(attr_value, list):
+            elif _checker(base_type, list) and isinstance(attr_value, list):
                 _dict_repr[field.name] = _resolve_list(
                     _type=field.annotation, attr_value=attr_value
                 )
 
-            elif issubclass(base_type, tuple) and isinstance(attr_value, list):
+            elif _checker(base_type, tuple) and isinstance(attr_value, list):
                 _dict_repr[field.name] = _resolve_tuple(
                     _type=field.annotation, attr_value=attr_value
                 )
 
-            elif issubclass(base_type, dict) and isinstance(attr_value, dict):
+            elif _checker(base_type, dict) and isinstance(attr_value, dict):
                 _dict_repr[field.name] = _resolve_dict(
                     _type=field.annotation, attr_value=attr_value
                 )

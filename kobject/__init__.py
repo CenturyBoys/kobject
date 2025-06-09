@@ -1,9 +1,18 @@
 """
 Know your object a __init__ type validator
 """
+
 from enum import Enum
 
 from kobject.validator import Kobject
+
+
+class EmptyType:
+    def __repr__(self):
+        return "<EMPTY>"
+
+
+Empty = EmptyType()
 
 Kobject.set_decoder_resolver(bool, lambda attr_type, value: value)
 Kobject.set_decoder_resolver(
@@ -24,4 +33,4 @@ Kobject.set_decoder_resolver(
     else value,
 )
 
-__all__ = ["Kobject"]
+__all__ = ["Kobject", "Empty"]

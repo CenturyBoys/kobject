@@ -1,18 +1,23 @@
 import datetime
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntEnum
 from json import JSONDecodeError
 from typing import List, Tuple
 from uuid import UUID
 
 import pytest
 
-from kobject import Kobject
+from kobject import Kobject, Empty
+
+
+class EnumStub(IntEnum):
+    A = 1
 
 
 @dataclass
 class BaseA(Kobject):
     a_datetime: datetime.datetime
+    a_enum: None | EnumStub = Empty
 
 
 @dataclass
@@ -95,7 +100,7 @@ def test_from_json_unable_to_cast():
         b'"a_tuple_of_bool": [true],"a_base_a": {"a_date'
         b'time": "2023-02-01 17:38:45.389426"},"a_base_b": {"a_'
         b'uuid":"1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_lis'
-        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}],'
+        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426", "a_enum": 1}],'
         b' "a_int_default_none": null}'
     )
     with pytest.raises(MyException) as error:
@@ -119,12 +124,16 @@ def test_from_json():
         if isinstance(value, dict)
         else value,
     )
+    Kobject.set_decoder_resolver(
+        IntEnum,
+        lambda attr_type, value: attr_type(value) if isinstance(value, int) else value,
+    )
     payload = (
         b'{"a_int": 1,"a_str": "lala","a_list_of_int": [1,2,3],'
         b'"a_tuple_of_bool": [true],"a_base_a": {"a_date'
         b'time": "2023-02-01 17:38:45.389426"},"a_base_b": {"a_'
         b'uuid":"1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_lis'
-        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}],'
+        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426", "a_enum": 1}],'
         b' "a_int_default_none": null}'
     )
     instance = BaseC.from_json(payload=payload)
@@ -216,7 +225,7 @@ def test_from_json_enum_with_default_value():
 def test_from_json_enum_with_default_value_set():
     obj = BaseF.from_json(payload=b'{"a_stub_enum": 1}')
     assert obj.a_stub_enum == StubEnum.LORO
-    assert obj.b_stub_enum == None
+    assert obj.b_stub_enum is None
 
 
 def test_from_json_tuple_invalid_value():

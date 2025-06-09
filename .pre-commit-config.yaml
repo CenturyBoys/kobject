@@ -1,23 +1,12 @@
 repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.7.0
+  hooks:
+    - id: ruff
+      args: [ --fix ]
+    - id: ruff-format
 - repo: local
   hooks:
-    - id: black
-      name: black
-      entry: black .
-      language: system
-      types: [ python ]
-    - id: pylint
-      name: pylint
-      entry: pylint kobject
-      language: system
-      types: [python]
-      args:
-        [
-          "--ignore-paths",
-          "tests/",
-          "-rn", # Only display messages
-          "-sn", # Don't display the score
-        ]
     - id: pytest
       name: pytest
       entry: pytest
