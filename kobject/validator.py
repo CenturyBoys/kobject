@@ -205,6 +205,10 @@ def _resolve_tuple(_type: Type, attr_value: Any):
 
 
 def _resolve_dict(_type: Type, attr_value: Any):
+    _typed_dict = hasattr(_type, "__args__")
+    if not _typed_dict:
+        return attr_value
+
     attr_value_new = {}
     for key, value in attr_value.items():
         attr_value_new.update(
