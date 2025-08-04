@@ -11,6 +11,9 @@ class EmptyType:
     def __repr__(self):
         return "<EMPTY>"
 
+    def __bool__(self):
+        return False
+
 
 Empty = EmptyType()
 
