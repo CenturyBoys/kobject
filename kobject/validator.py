@@ -463,7 +463,10 @@ class Kobject:
 
             base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
 
-            if _checker(base_type, list | tuple | dict) is False:
+            if isinstance(None, base_type) and attr_value is None:
+                _dict_repr[field.name] = attr_value
+
+            elif _checker(base_type, list | tuple | dict) is False:
                 _dict_repr[field.name] = JSONDecoder.type_caster(
                     attr_type=field.annotation, attr_value=attr_value
                 )
