@@ -1,4 +1,5 @@
 import datetime
+import typing
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from json import JSONDecodeError
@@ -106,8 +107,15 @@ def test_from_json_unable_to_cast():
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=payload)
     assert error.value.args == (
-        "Class 'BaseA' type error:\n Wrong type for a_datetime: <class 'datetime.datetime'> != '<class 'str'>'",
+        "Class 'BaseA' type error:\n Wrong type for a_datetime: <class 'datetime.datetime'> != `'2023-02-01 17:38:45.389426'`",
     )
+    assert error.value.json_error() == [
+        {
+            "field": "a_datetime",
+            "type": datetime.datetime,
+            "value": "'2023-02-01 17:38:45.389426'",
+        }
+    ]
     Kobject.set_content_check_custom_exception(Exception)
 
 
@@ -151,9 +159,24 @@ def test_from_json_empty_payload_custom_exception():
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
-        "Missing content -> The fallow attr are not presente a_int, a_str, "
-        "a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_base_a",
+        "Missing content the fallow attr are not presente:\n"
+        "a_int: <class 'int'> != `Empty`\n"
+        "a_str: <class 'str'> != `Empty`\n"
+        "a_list_of_int: typing.List[int] != `Empty`\n"
+        "a_tuple_of_bool: typing.Tuple[bool] != `Empty`\n"
+        "a_base_a: <class 'tests.kobject.from_json.test_main.BaseA'> != `Empty`\n"
+        "a_base_b: <class 'tests.kobject.from_json.test_main.BaseB'> != `Empty`\n"
+        "a_list_of_base_a: typing.List[tests.kobject.from_json.test_main.BaseA] != `Empty`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_int", "type": int, "value": "Empty"},
+        {"field": "a_str", "type": str, "value": "Empty"},
+        {"field": "a_list_of_int", "type": typing.List[int], "value": "Empty"},
+        {"field": "a_tuple_of_bool", "type": typing.Tuple[bool], "value": "Empty"},
+        {"field": "a_base_a", "type": BaseA, "value": "Empty"},
+        {"field": "a_base_b", "type": BaseB, "value": "Empty"},
+        {"field": "a_list_of_base_a", "type": typing.List[BaseA], "value": "Empty"},
+    ]
     Kobject.set_content_check_custom_exception(None)
 
 
@@ -162,9 +185,24 @@ def test_from_json_empty_payload():
     with pytest.raises(TypeError) as error:
         BaseC.from_json(payload=b"{}")
     assert error.value.args == (
-        "Missing content -> The fallow attr are not presente a_int, a_str, "
-        "a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_base_a",
+        "Missing content the fallow attr are not presente:\n"
+        "a_int: <class 'int'> != `Empty`\n"
+        "a_str: <class 'str'> != `Empty`\n"
+        "a_list_of_int: typing.List[int] != `Empty`\n"
+        "a_tuple_of_bool: typing.Tuple[bool] != `Empty`\n"
+        "a_base_a: <class 'tests.kobject.from_json.test_main.BaseA'> != `Empty`\n"
+        "a_base_b: <class 'tests.kobject.from_json.test_main.BaseB'> != `Empty`\n"
+        "a_list_of_base_a: typing.List[tests.kobject.from_json.test_main.BaseA] != `Empty`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_int", "type": int, "value": "Empty"},
+        {"field": "a_str", "type": str, "value": "Empty"},
+        {"field": "a_list_of_int", "type": typing.List[int], "value": "Empty"},
+        {"field": "a_tuple_of_bool", "type": typing.Tuple[bool], "value": "Empty"},
+        {"field": "a_base_a", "type": BaseA, "value": "Empty"},
+        {"field": "a_base_b", "type": BaseB, "value": "Empty"},
+        {"field": "a_list_of_base_a", "type": typing.List[BaseA], "value": "Empty"},
+    ]
 
 
 def test_from_json_wrong_type_expected_list():
@@ -180,11 +218,17 @@ def test_from_json_wrong_type_expected_list():
         BaseD.from_json(payload=payload)
     assert error.value.args == (
         "Class 'BaseD' type error:\n"
-        " Wrong type for a_list_of_int: typing.List[int] != '<class 'NoneType'>'\n"
-        " Wrong type for a_list_of_bool: typing.List[bool] != '<class 'int'>'\n"
-        " Wrong type for a_list_of_float: typing.List[float] != '<class 'str'>'\n"
-        " Wrong type for a_list_of_str: typing.List[int] != '<class 'float'>'",
+        " Wrong type for a_list_of_int: typing.List[int] != `None`\n"
+        " Wrong type for a_list_of_bool: typing.List[bool] != `0`\n"
+        " Wrong type for a_list_of_float: typing.List[float] != `'lala'`\n"
+        " Wrong type for a_list_of_str: typing.List[int] != `1.3`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_list_of_int", "type": typing.List[int], "value": "None"},
+        {"field": "a_list_of_bool", "type": typing.List[bool], "value": "0"},
+        {"field": "a_list_of_float", "type": typing.List[float], "value": "'lala'"},
+        {"field": "a_list_of_str", "type": typing.List[int], "value": "1.3"},
+    ]
 
 
 def test_from_json_wrong_type_list():
@@ -200,11 +244,17 @@ def test_from_json_wrong_type_list():
         BaseE.from_json(payload=payload)
     assert error.value.args == (
         "Class 'BaseE' type error:\n"
-        " Wrong type for a_list_of_int: <class 'int'> != '<class 'list'>'\n"
-        " Wrong type for a_list_of_bool: <class 'bool'> != '<class 'list'>'\n"
-        " Wrong type for a_list_of_float: <class 'float'> != '<class 'list'>'\n"
-        " Wrong type for a_list_of_str: <class 'int'> != '<class 'list'>'",
+        " Wrong type for a_list_of_int: <class 'int'> != `[]`\n"
+        " Wrong type for a_list_of_bool: <class 'bool'> != `[]`\n"
+        " Wrong type for a_list_of_float: <class 'float'> != `[]`\n"
+        " Wrong type for a_list_of_str: <class 'int'> != `[]`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_list_of_int", "type": int, "value": "[]"},
+        {"field": "a_list_of_bool", "type": bool, "value": "[]"},
+        {"field": "a_list_of_float", "type": float, "value": "[]"},
+        {"field": "a_list_of_str", "type": int, "value": "[]"},
+    ]
 
 
 def test_from_json_error_enum_invalid_value():
@@ -212,8 +262,11 @@ def test_from_json_error_enum_invalid_value():
         BaseF.from_json(payload=b'{"a_stub_enum": 2,"b_stub_enum": null}')
     assert error.value.args == (
         "Class 'BaseF' type error:\n"
-        " Wrong type for a_stub_enum: <enum 'StubEnum'> != '<class 'int'>'",
+        " Wrong type for a_stub_enum: <enum 'StubEnum'> != `2`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_stub_enum", "type": StubEnum, "value": "2"}
+    ]
 
 
 def test_from_json_enum_with_default_value():
@@ -233,9 +286,13 @@ def test_from_json_tuple_invalid_value():
         BaseG.from_json(payload=b'{"a_tuple":null,"a_dict":null}')
     assert error.value.args == (
         "Class 'BaseG' type error:\n"
-        " Wrong type for a_tuple: tuple[int, int] != '<class 'NoneType'>'\n"
-        " Wrong type for a_dict: dict[str, tests.kobject.from_json.test_main.BaseB] != '<class 'NoneType'>'",
+        " Wrong type for a_tuple: tuple[int, int] != `None`\n"
+        " Wrong type for a_dict: dict[str, tests.kobject.from_json.test_main.BaseB] != `None`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_tuple", "type": tuple[int, int], "value": "None"},
+        {"field": "a_dict", "type": dict[str, BaseB], "value": "None"},
+    ]
 
 
 def test_from_json_tuple_and_dict_cast():

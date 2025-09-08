@@ -76,8 +76,23 @@ instance = StubClass(a_list_int=[1, "", 2, ""], a_tuple_bool=["", True])
 Traceback (most recent call last):
 ...
 TypeError: Class 'StubClass' type error:
- Wrong type for a_list_int: typing.List[int] != '<class 'list'>'
- Wrong type for a_tuple_bool: typing.Tuple[bool] != '<class 'list'>'
+ Wrong type for a_list_int: typing.List[int] != `[1, '', 2, '']`
+ Wrong type for a_tuple_bool: typing.Tuple[bool] != `['', True]`
+```
+
+You can retrieve the structured error by calling `json_error` method
+
+```python
+try:
+    instance = StubClass(a_list_int=[1, "", 2, ""], a_tuple_bool=["", True])
+except TypeError as _error:
+    print(_error.json_error())
+```
+
+Output:
+
+```bash
+[{'field': 'a_list_int', 'type': typing.List[int], 'value': "[1, '', 2, '']"}, {'field': 'a_tuple_bool', 'type': typing.Tuple[bool], 'value': "['', True]"}]
 ```
 
 You can use lazy validation to improve performance, the code will stop in the first found error for this use
@@ -135,7 +150,7 @@ instance = StubClass(a__int="")
 Traceback (most recent call last):
 ...
 CustomException: Class 'StubClass' type error:
- Wrong type for a__int: <class 'int'> != '<class 'str'>'
+ Wrong type for a__int: <class 'int'> != `''`
 ```
 
 ### ToJSON

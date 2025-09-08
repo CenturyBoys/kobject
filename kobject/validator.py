@@ -343,10 +343,14 @@ class Kobject:
         for field in self._with_field_map():
             # When we replace the __post_init__ with __new__ the income arguments cant be not there.
             # value = getattr(self, field.name) if hasattr(self, field.name) else _empty
-            if _validate_field_value(getattr(self, field.name), field) is False:
+            _value = getattr(self, field.name)
+            if _validate_field_value(_value, field) is False:
                 _errors.append(
-                    f"Wrong type for {field.name}:"
-                    f" {field.annotation} != '{type(getattr(self, field.name))}'"
+                    {
+                        "field": field.name,
+                        "type": field.annotation,
+                        "value": _value.__repr__(),
+                    }
                 )
                 assert isinstance(self.__lazy_type_check__, bool)
                 if self.__lazy_type_check__:
@@ -355,12 +359,29 @@ class Kobject:
             exception = self.__custom_exception__
             if self.__custom_exception__ is None:
                 exception = TypeError
-            raise exception(
+            _exception = exception(
                 "Class '{}' type error:\n {}".format(
                     self.__class__.__name__,
-                    "\n ".join(_errors),
+                    "\n ".join(
+                        [
+                            "Wrong type for {field}: {type} != `{value}`".format(**_e)
+                            for _e in _errors
+                        ]
+                    ),
                 )
             )
+            raise self._enriched_error(_exception, _errors)
+
+    @staticmethod
+    def _enriched_error(exception: Exception, errors: list[dict]) -> Exception:
+        object.__setattr__(exception, "__structured_validation_errors__", errors)
+
+        def json_error(self):
+            return self.__structured_validation_errors__
+
+        exception.json_error = types.MethodType(json_error, exception)
+
+        return exception
 
     @classmethod
     def set_validation_custom_exception(cls, exception: Type[Exception]):
@@ -430,15 +451,36 @@ class Kobject:
             instance = cls.from_dict(dict_repr=dict_repr)
             return instance
         except TypeError as original_error:
+            _exception = original_error
             if cls.__from_json_custom_exception__ is not None:
-                raise cls.__from_json_custom_exception__(original_error.args[0])
-            raise original_error
+                _exception = cls.__from_json_custom_exception__(original_error.args[0])
+
+            if hasattr(original_error, "json_error"):
+                _exception = cls._enriched_error(
+                    _exception, original_error.json_error()
+                )
+
+            raise _exception
         except Exception as original_error:
+            _exception = original_error
+
             if cls.__from_json_custom_exception__ is not None:
-                raise cls.__from_json_custom_exception__(  # pylint: disable=E1102
+                _exception = cls.__from_json_custom_exception__(  # pylint: disable=E1102
                     f"Invalid content -> {str(payload)}",
-                ) from original_error
-            raise original_error
+                )
+
+            _exception = cls._enriched_error(
+                _exception,
+                [
+                    {
+                        "field": cls.__name__,
+                        "type": type(cls),
+                        "value": str(payload),
+                    }
+                ],
+            )
+
+            raise _exception from original_error
 
     @classmethod
     def from_dict(cls: T, dict_repr: Dict) -> Type[T]:  # pylint: disable=R0914
@@ -454,7 +496,13 @@ class Kobject:
             if _is_missing and field.have_default_value:
                 continue
             if _is_missing:
-                _missing.append(field.name)
+                _missing.append(
+                    {
+                        "field": field.name,
+                        "type": field.annotation,
+                        "value": "Empty",
+                    }
+                )
                 continue
 
             _dict_repr.update({field.name: attr_value})
@@ -487,9 +535,16 @@ class Kobject:
                 )
 
         if _missing:
-            raise TypeError(
-                f"Missing content -> The fallow attr are not presente {', '.join(_missing)}"
+            _exception = TypeError(
+                "Missing content the fallow attr are not presente:\n{}".format(
+                    "\n".join(
+                        ["{field}: {type} != `{value}`".format(**_e) for _e in _missing]
+                    )
+                )
             )
+
+            _exception = cls._enriched_error(_exception, _missing)
+            raise _exception
         return cls(**_dict_repr)
 
     def dict(self):

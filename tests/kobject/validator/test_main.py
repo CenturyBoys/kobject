@@ -1,3 +1,4 @@
+import typing
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import List, Tuple, Union, Optional, Dict, Coroutine, Callable, Any
@@ -74,7 +75,8 @@ def test_simple_attr_error(simple_attr):
     with pytest.raises(TypeError) as error:
 
         class E:
-            pass
+            def __repr__(self):
+                return "<E >"
 
         a_int = ""
         a_bool = 2
@@ -95,13 +97,12 @@ def test_simple_attr_error(simple_attr):
     assert error.type is TypeError
     assert error.value.args == (
         "Class 'StubClass' type error:\n"
-        " Wrong type for a_int: <class 'int'> != '<class 'str'>'\n"
-        " Wrong type for a_bool: <class 'bool'> != '<class 'int'>'\n"
-        " Wrong type for a_str: <class 'str'> != '<class 'float'>'\n"
-        " Wrong type for a_float: <class 'float'> != '<class 'bool'>'\n"
-        " Wrong type for a_dict: <class 'dict'> != '<class 'bool'>'\n"
-        " Wrong type for a_object: <class 'tests.kobject.validator.test_main.StubInstance'> != "
-        "'<class 'tests.kobject.validator.test_main.test_simple_attr_error.<locals>.E'>'",
+        " Wrong type for a_int: <class 'int'> != `''`\n"
+        " Wrong type for a_bool: <class 'bool'> != `2`\n"
+        " Wrong type for a_str: <class 'str'> != `1.0`\n"
+        " Wrong type for a_float: <class 'float'> != `True`\n"
+        " Wrong type for a_dict: <class 'dict'> != `True`\n"
+        " Wrong type for a_object: <class 'tests.kobject.validator.test_main.StubInstance'> != `<E >`",
     )
 
 
@@ -188,7 +189,8 @@ def test_attr_with_content_error(attr_with_content):
     with pytest.raises(TypeError) as error:
 
         class E:
-            pass
+            def __repr__(self):
+                return "<E >"
 
         a_list_int = [1, 2, "", 3, ""]
         a_tuple_exactly_two_floats = (1.0, "")
@@ -211,14 +213,47 @@ def test_attr_with_content_error(attr_with_content):
 
     assert error.value.args == (
         "Class 'StubClass' type error:\n"
-        " Wrong type for a_list_int: typing.List[int] != '<class 'list'>'\n"
-        " Wrong type for a_tuple_exactly_one_float: typing.Tuple[float] != '<class 'tuple'>'\n"
-        " Wrong type for a_tuple_exactly_two_floats: typing.Tuple[float, float] != '<class 'tuple'>'\n"
-        " Wrong type for a_tuple_exactly_three_floats: typing.Tuple[float, float, float] != '<class 'tuple'>'\n"
-        " Wrong type for a_tuple_object: typing.Tuple[tests.kobject.validator.test_main.StubInstance] != '<class 'tuple'>'\n"
-        " Wrong type for a_dict_str_optional_int: typing.Dict[str, None | int] != '<class 'dict'>'\n"
-        " Wrong type for b_dict_str_optional_int: dict[str, None | int] != '<class 'dict'>'",
+        " Wrong type for a_list_int: typing.List[int] != `[1, 2, '', 3, '']`\n"
+        " Wrong type for a_tuple_exactly_one_float: typing.Tuple[float] != `(1.0, 1.0)`\n"
+        " Wrong type for a_tuple_exactly_two_floats: typing.Tuple[float, float] != `(1.0, '')`\n"
+        " Wrong type for a_tuple_exactly_three_floats: typing.Tuple[float, float, float] != `(1.0, 1.0)`\n"
+        " Wrong type for a_tuple_object: typing.Tuple[tests.kobject.validator.test_main.StubInstance] != `(<E >,)`\n"
+        " Wrong type for a_dict_str_optional_int: typing.Dict[str, None | int] != `{'str': True, 1: 'str', 2: True}`\n"
+        " Wrong type for b_dict_str_optional_int: dict[str, None | int] != `{'str': True, 1: 'str', 2: True}`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_list_int", "type": typing.List[int], "value": "[1, 2, '', 3, '']"},
+        {
+            "field": "a_tuple_exactly_one_float",
+            "type": typing.Tuple[float],
+            "value": "(1.0, 1.0)",
+        },
+        {
+            "field": "a_tuple_exactly_two_floats",
+            "type": typing.Tuple[float, float],
+            "value": "(1.0, '')",
+        },
+        {
+            "field": "a_tuple_exactly_three_floats",
+            "type": typing.Tuple[float, float, float],
+            "value": "(1.0, 1.0)",
+        },
+        {
+            "field": "a_tuple_object",
+            "type": typing.Tuple[StubInstance],
+            "value": "(<E >,)",
+        },
+        {
+            "field": "a_dict_str_optional_int",
+            "type": typing.Dict[str, None | int],
+            "value": "{'str': True, 1: 'str', 2: True}",
+        },
+        {
+            "field": "b_dict_str_optional_int",
+            "type": dict[str, None | int],
+            "value": "{'str': True, 1: 'str', 2: True}",
+        },
+    ]
 
 
 def test_attr_with_content(attr_with_content):
@@ -304,11 +339,21 @@ def test_not_real_type_attr_content_error(not_real_type_attr):
     assert error.type is TypeError
     assert error.value.args == (
         "Class 'StubClass' type error:\n"
-        " Wrong type for a_union_int_bool: typing.Union[int, bool] != '<class 'str'>'\n"
-        " Wrong type for a_optional_str: typing.Optional[str] != '<class 'int'>'\n"
-        " Wrong type for a_optional_int: int | None != '<class 'str'>'\n"
-        " Wrong type for b_optional_int: tests.kobject.validator.test_main.EnumStub | None != '<class 'str'>'",
+        " Wrong type for a_union_int_bool: typing.Union[int, bool] != `'a_str'`\n"
+        " Wrong type for a_optional_str: typing.Optional[str] != `1`\n"
+        " Wrong type for a_optional_int: int | None != `'lala'`\n"
+        " Wrong type for b_optional_int: tests.kobject.validator.test_main.EnumStub | None != `'lala'`",
     )
+    assert error.value.json_error() == [
+        {
+            "field": "a_union_int_bool",
+            "type": typing.Union[int, bool],
+            "value": "'a_str'",
+        },
+        {"field": "a_optional_str", "type": typing.Optional[str], "value": "1"},
+        {"field": "a_optional_int", "type": int | None, "value": "'lala'"},
+        {"field": "b_optional_int", "type": EnumStub | None, "value": "'lala'"},
+    ]
 
 
 def test_not_real_type_attr_content_set_1(not_real_type_attr):
@@ -385,10 +430,15 @@ def test_callables_attr_content_error(callables_attr):
     assert error.type is TypeError
     assert error.value.args == (
         "Class 'StubClass' type error:\n"
-        " Wrong type for a_coroutine: typing.Coroutine != '<class 'int'>'\n"
-        " Wrong type for a_callable: typing.Callable != '<class 'int'>'\n"
-        " Wrong type for b_callable: typing.Callable != '<class 'int'>'",
+        " Wrong type for a_coroutine: typing.Coroutine != `1`\n"
+        " Wrong type for a_callable: typing.Callable != `1`\n"
+        " Wrong type for b_callable: typing.Callable != `1`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_coroutine", "type": typing.Coroutine, "value": "1"},
+        {"field": "a_callable", "type": typing.Callable, "value": "1"},
+        {"field": "b_callable", "type": typing.Callable, "value": "1"},
+    ]
 
 
 def test_callables_attr_content(callables_attr):
@@ -490,9 +540,11 @@ def test_default_value_attr_error(default_attr):
         default_attr(a_bool="")
     assert error.type is TypeError
     assert error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+        "Class 'StubClass' type error:\n Wrong type for a_bool: <class 'bool'> != `''`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_bool", "type": bool, "value": "''"}
+    ]
 
 
 def test_default_value_attr(default_attr):
@@ -537,13 +589,18 @@ def test_custom_exception(custom_exception):
     with pytest.raises(CustomException) as c_error:
         custom_exception(a_bool="")
     assert t_error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+        "Class 'StubClass' type error:\n Wrong type for a_bool: <class 'bool'> != `''`",
     )
+    assert t_error.value.json_error() == [
+        {"field": "a_bool", "type": bool, "value": "''"}
+    ]
+
     assert c_error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+        "Class 'StubClass' type error:\n Wrong type for a_bool: <class 'bool'> != `''`",
     )
+    assert c_error.value.json_error() == [
+        {"field": "a_bool", "type": bool, "value": "''"}
+    ]
 
 
 @pytest.fixture(
@@ -581,9 +638,11 @@ def test_lazy_validator_on(lazy_validator):
     with pytest.raises(TypeError) as t_error:
         lazy_validator(a_bool="", b_bool="")
     assert t_error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'",
+        "Class 'StubClass' type error:\n Wrong type for a_bool: <class 'bool'> != `''`",
     )
+    assert t_error.value.json_error() == [
+        {"field": "a_bool", "type": bool, "value": "''"}
+    ]
 
 
 def test_lazy_validator_off(lazy_validator):
@@ -592,6 +651,11 @@ def test_lazy_validator_off(lazy_validator):
         lazy_validator(a_bool="", b_bool="")
     assert t_error.value.args == (
         "Class 'StubClass' type error:\n"
-        " Wrong type for a_bool: <class 'bool'> != '<class 'str'>'\n"
-        " Wrong type for b_bool: <class 'bool'> != '<class 'str'>'",
+        " Wrong type for a_bool: <class 'bool'> != `''`\n"
+        " Wrong type for b_bool: <class 'bool'> != `''`",
     )
+
+    assert t_error.value.json_error() == [
+        {"field": "a_bool", "type": bool, "value": "''"},
+        {"field": "b_bool", "type": bool, "value": "''"},
+    ]
