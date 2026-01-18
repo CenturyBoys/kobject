@@ -235,6 +235,52 @@ print(json_bytes)
 b'{"a_base_a": {"a_datetime": "2023-02-01 17:38:45.389426"}, "a_base_b": {"a_uuid": "1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_list_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}]}'
 ```
 
+#### Remove None values
+
+Both `dict()` and `to_json()` methods support the `remove_nones` parameter to recursively strip `None` values from the output.
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict
+
+from kobject import Kobject
+
+
+@dataclass
+class Inner(Kobject):
+    value: str | None
+
+
+@dataclass
+class Outer(Kobject):
+    a_int: int
+    a_str: str | None
+    a_list: List[int | None]
+    a_dict: Dict[str, int | None]
+    inner: Inner
+
+
+instance = Outer(
+    a_int=1,
+    a_str=None,
+    a_list=[1, None, 2],
+    a_dict={"a": 1, "b": None},
+    inner=Inner(value=None)
+)
+
+# Default behavior preserves None values
+print(instance.dict())
+# {'a_int': 1, 'a_str': None, 'a_list': [1, None, 2], 'a_dict': {'a': 1, 'b': None}, 'inner': {'value': None}}
+
+# With remove_nones=True, None values are recursively removed
+print(instance.dict(remove_nones=True))
+# {'a_int': 1, 'a_list': [1, 2], 'a_dict': {'a': 1}, 'inner': {}}
+
+# Also works with to_json()
+print(instance.to_json(remove_nones=True))
+# b'{"a_int":1,"a_list":[1,2],"a_dict":{"a":1},"inner":{}}'
+```
+
 ### FromJSON
 
 Kobject has his own implementation to parse JSON to a class instance.

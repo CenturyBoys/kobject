@@ -92,3 +92,77 @@ def test_on_dict():
     b_dict_repr = instance.dict()
     assert isinstance(a_dict_repr["a_datetime"], str)
     assert isinstance(b_dict_repr["a_datetime"], datetime)
+
+
+@dataclass
+class WithOptional(Kobject):
+    a_int: int
+    a_str: str | None
+    a_list: List[int | None]
+    a_dict: Dict[str, int | None]
+
+
+@dataclass
+class NestedWithOptional(Kobject):
+    inner: WithOptional
+    value: str | None
+
+
+def test_dict_remove_nones_false_default():
+    instance = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None, 2],
+        a_dict={"a": 1, "b": None},
+    )
+    result = instance.dict()
+    assert result == {
+        "a_int": 1,
+        "a_str": None,
+        "a_list": [1, None, 2],
+        "a_dict": {"a": 1, "b": None},
+    }
+
+
+def test_dict_remove_nones_true():
+    instance = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None, 2],
+        a_dict={"a": 1, "b": None},
+    )
+    result = instance.dict(remove_nones=True)
+    assert result == {
+        "a_int": 1,
+        "a_list": [1, 2],
+        "a_dict": {"a": 1},
+    }
+
+
+def test_dict_remove_nones_recursive():
+    inner = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None],
+        a_dict={"a": None},
+    )
+    instance = NestedWithOptional(inner=inner, value=None)
+    result = instance.dict(remove_nones=True)
+    assert result == {
+        "inner": {
+            "a_int": 1,
+            "a_list": [1],
+            "a_dict": {},
+        },
+    }
+
+
+def test_to_json_remove_nones():
+    instance = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None, 2],
+        a_dict={"a": 1, "b": None},
+    )
+    result = instance.to_json(remove_nones=True)
+    assert result == b'{"a_int":1,"a_list":[1,2],"a_dict":{"a":1}}'

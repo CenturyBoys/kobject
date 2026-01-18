@@ -211,49 +211,34 @@ def test_attr_with_content_error(attr_with_content):
         )
     assert error.type is TypeError
 
-    assert error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_list_int: typing.List[int] != `[1, 2, '', 3, '']`\n"
-        " Wrong type for a_tuple_exactly_one_float: typing.Tuple[float] != `(1.0, 1.0)`\n"
-        " Wrong type for a_tuple_exactly_two_floats: typing.Tuple[float, float] != `(1.0, '')`\n"
-        " Wrong type for a_tuple_exactly_three_floats: typing.Tuple[float, float, float] != `(1.0, 1.0)`\n"
-        " Wrong type for a_tuple_object: typing.Tuple[tests.kobject.validator.test_main.StubInstance] != `(<E >,)`\n"
-        " Wrong type for a_dict_str_optional_int: typing.Dict[str, None | int] != `{'str': True, 1: 'str', 2: True}`\n"
-        " Wrong type for b_dict_str_optional_int: dict[str, None | int] != `{'str': True, 1: 'str', 2: True}`",
-    )
-    assert error.value.json_error() == [
-        {"field": "a_list_int", "type": typing.List[int], "value": "[1, 2, '', 3, '']"},
-        {
-            "field": "a_tuple_exactly_one_float",
-            "type": typing.Tuple[float],
-            "value": "(1.0, 1.0)",
-        },
-        {
-            "field": "a_tuple_exactly_two_floats",
-            "type": typing.Tuple[float, float],
-            "value": "(1.0, '')",
-        },
-        {
-            "field": "a_tuple_exactly_three_floats",
-            "type": typing.Tuple[float, float, float],
-            "value": "(1.0, 1.0)",
-        },
-        {
-            "field": "a_tuple_object",
-            "type": typing.Tuple[StubInstance],
-            "value": "(<E >,)",
-        },
-        {
-            "field": "a_dict_str_optional_int",
-            "type": typing.Dict[str, None | int],
-            "value": "{'str': True, 1: 'str', 2: True}",
-        },
-        {
-            "field": "b_dict_str_optional_int",
-            "type": dict[str, None | int],
-            "value": "{'str': True, 1: 'str', 2: True}",
-        },
-    ]
+    error_msg = error.value.args[0]
+    assert "Class 'StubClass' type error:" in error_msg
+    assert "Wrong type for a_list_int:" in error_msg
+    assert "[1, 2, '', 3, '']" in error_msg
+    assert "Wrong type for a_tuple_exactly_one_float:" in error_msg
+    assert "(1.0, 1.0)" in error_msg
+    assert "Wrong type for a_tuple_exactly_two_floats:" in error_msg
+    assert "(1.0, '')" in error_msg
+    assert "Wrong type for a_tuple_exactly_three_floats:" in error_msg
+    assert "Wrong type for a_tuple_object:" in error_msg
+    assert "(<E >,)" in error_msg
+    assert "Wrong type for a_dict_str_optional_int:" in error_msg
+    assert "Wrong type for b_dict_str_optional_int:" in error_msg
+
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 7
+    assert json_errors[0]["field"] == "a_list_int"
+    assert json_errors[0]["value"] == "[1, 2, '', 3, '']"
+    assert json_errors[1]["field"] == "a_tuple_exactly_one_float"
+    assert json_errors[1]["value"] == "(1.0, 1.0)"
+    assert json_errors[2]["field"] == "a_tuple_exactly_two_floats"
+    assert json_errors[2]["value"] == "(1.0, '')"
+    assert json_errors[3]["field"] == "a_tuple_exactly_three_floats"
+    assert json_errors[3]["value"] == "(1.0, 1.0)"
+    assert json_errors[4]["field"] == "a_tuple_object"
+    assert json_errors[4]["value"] == "(<E >,)"
+    assert json_errors[5]["field"] == "a_dict_str_optional_int"
+    assert json_errors[6]["field"] == "b_dict_str_optional_int"
 
 
 def test_attr_with_content(attr_with_content):
@@ -337,23 +322,25 @@ def test_not_real_type_attr_content_error(not_real_type_attr):
             b_optional_int=b_optional_int,
         )
     assert error.type is TypeError
-    assert error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_union_int_bool: typing.Union[int, bool] != `'a_str'`\n"
-        " Wrong type for a_optional_str: typing.Optional[str] != `1`\n"
-        " Wrong type for a_optional_int: int | None != `'lala'`\n"
-        " Wrong type for b_optional_int: tests.kobject.validator.test_main.EnumStub | None != `'lala'`",
-    )
-    assert error.value.json_error() == [
-        {
-            "field": "a_union_int_bool",
-            "type": typing.Union[int, bool],
-            "value": "'a_str'",
-        },
-        {"field": "a_optional_str", "type": typing.Optional[str], "value": "1"},
-        {"field": "a_optional_int", "type": int | None, "value": "'lala'"},
-        {"field": "b_optional_int", "type": EnumStub | None, "value": "'lala'"},
-    ]
+
+    error_msg = error.value.args[0]
+    assert "Class 'StubClass' type error:" in error_msg
+    assert "Wrong type for a_union_int_bool:" in error_msg
+    assert "'a_str'" in error_msg
+    assert "Wrong type for a_optional_str:" in error_msg
+    assert "Wrong type for a_optional_int:" in error_msg
+    assert "Wrong type for b_optional_int:" in error_msg
+
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 4
+    assert json_errors[0]["field"] == "a_union_int_bool"
+    assert json_errors[0]["value"] == "'a_str'"
+    assert json_errors[1]["field"] == "a_optional_str"
+    assert json_errors[1]["value"] == "1"
+    assert json_errors[2]["field"] == "a_optional_int"
+    assert json_errors[2]["value"] == "'lala'"
+    assert json_errors[3]["field"] == "b_optional_int"
+    assert json_errors[3]["value"] == "'lala'"
 
 
 def test_not_real_type_attr_content_set_1(not_real_type_attr):

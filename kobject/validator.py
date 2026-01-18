@@ -547,39 +547,52 @@ class Kobject:
             raise _exception
         return cls(**_dict_repr)
 
-    def dict(self):
+    def dict(self, remove_nones: bool = False):
         """
         Returns dict representation of your object
         """
-        return self._dict(resolver=JSONEncoder.dict_default)
+        return self._dict(resolver=JSONEncoder.dict_default, remove_nones=remove_nones)
 
-    def to_json(self) -> bytes:
+    def to_json(self, remove_nones: bool = False) -> bytes:
         """
         Returns json of your object
         """
-        dict_repr = self._dict(resolver=JSONEncoder.default)
+        dict_repr = self._dict(resolver=JSONEncoder.default, remove_nones=remove_nones)
         json_bytes = json.dumps(
             dict_repr, default=JSONEncoder.default, separators=(",", ":")
         )
         return json_bytes.encode()
 
-    def _dict(self, resolver: Callable[[any], any]):
+    def _dict(self, resolver: Callable[[any], any], remove_nones: bool = False):
+        def resolve(obj):
+            if isinstance(obj, Kobject):
+                return obj.dict(remove_nones=remove_nones)
+            return resolver(obj)
+
         _dict_representation = {}
 
         for field in self._with_field_map():
             attr_value = getattr(self, field.name)
+
+            if remove_nones and attr_value is None:
+                continue
+
             if not isinstance(attr_value, list | tuple | dict):
-                _dict_representation.update({field.name: resolver(attr_value)})
+                _dict_representation.update({field.name: resolve(attr_value)})
                 continue
             if isinstance(attr_value, list | tuple):
                 attr_value_new = []
                 for attr_value_item in attr_value:
-                    attr_value_new.append(resolver(attr_value_item))
+                    if remove_nones and attr_value_item is None:
+                        continue
+                    attr_value_new.append(resolve(attr_value_item))
                 _dict_representation.update({field.name: attr_value_new})
             else:
                 attr_value_new = {}
                 for key, value in attr_value.items():
-                    attr_value_new.update({resolver(key): resolver(value)})
+                    if remove_nones and value is None:
+                        continue
+                    attr_value_new.update({resolve(key): resolve(value)})
                 _dict_representation.update({field.name: attr_value_new})
 
         return _dict_representation

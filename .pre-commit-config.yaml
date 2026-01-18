@@ -9,14 +9,14 @@ repos:
   hooks:
     - id: pytest
       name: pytest
-      entry: pytest
+      entry: poetry run pytest
       language: system
       types: [ python ]
       pass_filenames: false
       always_run: true
     - id: mutatest
       name: mutatest
-      entry: mutatest
+      entry: poetry run mutatest
       language: system
       types: [ python ]
       args:
