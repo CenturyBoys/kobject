@@ -362,3 +362,155 @@ print(instance)
 ```bash
 BaseC(a_base_a=BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426)), a_base_b=BaseB(a_uuid=UUID('1d9cf695-c917-49ce-854b-4063f0cda2e7')), a_list_of_base_a=[BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426))])
 ```
+
+### JSON Schema
+
+Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+import json
+
+@dataclass
+class User(Kobject):
+    """
+    User model for the application.
+
+    :param name: The user's full name.
+    :param age: The user's age in years.
+    :param email: Optional email address.
+    :example: {"name": "Alice", "age": 30}
+    """
+    name: str
+    age: int
+    email: str | None = None
+
+schema = User.json_schema()
+print(json.dumps(schema, indent=2))
+```
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The user's full name."
+    },
+    "age": {
+      "type": "integer",
+      "description": "The user's age in years."
+    },
+    "email": {
+      "anyOf": [{"type": "string"}, {"type": "null"}],
+      "description": "Optional email address.",
+      "default": null
+    }
+  },
+  "additionalProperties": false,
+  "title": "User model for the application.",
+  "required": ["name", "age"],
+  "examples": [{"name": "Alice", "age": 30}]
+}
+```
+
+#### Docstring Metadata
+
+Kobject extracts metadata from reST-style docstrings:
+
+- **Title**: First line of the docstring
+- **Description**: Text between title and first directive (if different from title)
+- **Field descriptions**: `:param field_name: description`
+- **Examples**: `:example: {"json": "object"}`
+
+#### Supported Types
+
+| Python Type | JSON Schema |
+|-------------|-------------|
+| `str` | `{"type": "string"}` |
+| `int` | `{"type": "integer"}` |
+| `float` | `{"type": "number"}` |
+| `bool` | `{"type": "boolean"}` |
+| `None` | `{"type": "null"}` |
+| `list[T]` | `{"type": "array", "items": {...}}` |
+| `dict[K, V]` | `{"type": "object", "additionalProperties": {...}}` |
+| `tuple[X, Y]` | `{"type": "array", "prefixItems": [...], "minItems": N, "maxItems": N}` |
+| `set[T]` | `{"type": "array", "items": {...}, "uniqueItems": true}` |
+| `T \| None` | `{"anyOf": [{...}, {"type": "null"}]}` |
+| `Enum` | `{"type": "string/integer", "enum": [...]}` |
+| `Kobject` subclass | `{"$ref": "#/$defs/ClassName"}` |
+| `datetime` | `{"type": "string", "format": "date-time"}` |
+| `date` | `{"type": "string", "format": "date"}` |
+| `time` | `{"type": "string", "format": "time"}` |
+| `UUID` | `{"type": "string", "format": "uuid"}` |
+| `Decimal` | `{"type": "string", "pattern": "..."}` |
+
+#### Nested Kobjects
+
+Nested Kobject classes are handled using JSON Schema `$ref` and `$defs`:
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+
+@dataclass
+class Address(Kobject):
+    """
+    Address information.
+
+    :param street: Street name and number.
+    :param city: City name.
+    """
+    street: str
+    city: str
+
+@dataclass
+class Person(Kobject):
+    """
+    A person with an address.
+
+    :param name: Person's name.
+    :param address: Person's home address.
+    """
+    name: str
+    address: Address
+
+schema = Person.json_schema()
+# schema["properties"]["address"] == {"$ref": "#/$defs/Address", "description": "..."}
+# schema["$defs"]["Address"] contains the Address schema
+```
+
+#### Custom Schema Resolvers
+
+For custom types, you can register schema resolvers using `set_schema_resolver`:
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+
+class Money:
+    def __init__(self, amount: int, currency: str):
+        self.amount = amount
+        self.currency = currency
+
+# Register a custom schema resolver
+Kobject.set_schema_resolver(
+    Money,
+    lambda t: {
+        "type": "object",
+        "properties": {
+            "amount": {"type": "integer"},
+            "currency": {"type": "string", "minLength": 3, "maxLength": 3}
+        },
+        "required": ["amount", "currency"]
+    }
+)
+
+@dataclass
+class Invoice(Kobject):
+    total: Money
+
+schema = Invoice.json_schema()
+# schema["properties"]["total"] contains the custom Money schema
+```

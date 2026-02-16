@@ -4,9 +4,13 @@ Know your object - a __init__ type validator.
 
 from __future__ import annotations
 
+from datetime import date, datetime, time
+from decimal import Decimal
 from enum import Enum
+from uuid import UUID
 
 from kobject.core import Kobject
+from kobject.schema import JSONSchemaGenerator
 
 
 class EmptyType:
@@ -39,4 +43,21 @@ Kobject.set_decoder_resolver(
     else value,
 )
 
-__all__ = ["Empty", "Kobject"]
+# Register default schema resolvers for common types
+JSONSchemaGenerator.register_resolver(
+    datetime, lambda t: {"type": "string", "format": "date-time"}
+)
+JSONSchemaGenerator.register_resolver(
+    date, lambda t: {"type": "string", "format": "date"}
+)
+JSONSchemaGenerator.register_resolver(
+    time, lambda t: {"type": "string", "format": "time"}
+)
+JSONSchemaGenerator.register_resolver(
+    UUID, lambda t: {"type": "string", "format": "uuid"}
+)
+JSONSchemaGenerator.register_resolver(
+    Decimal, lambda t: {"type": "string", "pattern": r"^-?\d+(\.\d+)?$"}
+)
+
+__all__ = ["Empty", "JSONSchemaGenerator", "Kobject"]

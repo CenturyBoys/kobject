@@ -9,6 +9,7 @@ from inspect import Signature
 from typing import Any, ClassVar, TypeVar
 
 from kobject.fields import FieldMeta
+from kobject.schema import JSONSchemaGenerator
 from kobject.serialization import (
     JSONDecoder,
     JSONEncoder,
@@ -162,6 +163,30 @@ class Kobject:
          Example 'lambda value: value'
         """
         JSONEncoder.register_resolver(attr_type, resolver_callback, on_dict)
+
+    @staticmethod
+    def set_schema_resolver(
+        attr_type: type[Any],
+        resolver_callback: Callable[[type[Any]], dict[str, Any]],
+    ) -> None:
+        """
+        Register a schema resolver for a class or subclass.
+
+        attr_type: The type to match (supports subclass matching)
+        resolver_callback: Function that returns JSON Schema dict for the type.
+         Example 'lambda t: {"type": "string", "format": "date-time"}'
+        """
+        JSONSchemaGenerator.register_resolver(attr_type, resolver_callback)
+
+    @classmethod
+    def json_schema(cls) -> dict[str, Any]:
+        """
+        Generate JSON Schema Draft 7 for this class.
+
+        Returns:
+            Complete JSON Schema dict with $schema, properties, etc.
+        """
+        return JSONSchemaGenerator.generate(cls)
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__

@@ -31,28 +31,41 @@ mutatest -n 100 -s kobject
 
 ## Architecture
 
-The library consists of two main files:
+The library is organized into the following modules:
 
-- **`kobject/__init__.py`**: Entry point that exports `Kobject` and `Empty`. Registers default decoder resolvers for primitive types (bool, float, int, str), Kobject subclasses, and Enums.
+- **`kobject/__init__.py`**: Entry point that exports `Kobject`, `Empty`, and `JSONSchemaGenerator`. Registers default resolvers for primitive types, Kobject subclasses, Enums, and schema types (datetime, UUID, Decimal).
 
-- **`kobject/validator.py`**: Core implementation containing:
-  - `FieldMeta`: Dataclass representing a class field with pre-processed metadata (name, annotation, required, default value)
-  - `Kobject`: Main base class users inherit from. Provides:
-    - `__post_init__()`: Called after `__init__` to trigger validation (dataclasses call this automatically)
-    - `_with_field_map()`: Caches and returns field metadata extracted from `__init__` signature
-    - `from_json()`/`from_dict()`: Deserialize JSON/dict to class instance
-    - `to_json()`/`dict()`: Serialize instance to JSON/dict
-  - `JSONEncoder`/`JSONDecoder`: Handle custom type encoding/decoding via registered resolvers
+- **`kobject/core.py`**: Main `Kobject` base class that users inherit from. Provides:
+  - `__post_init__()`: Called after `__init__` to trigger validation
+  - `_with_field_map()`: Caches and returns field metadata from `__init__` signature
+  - `from_json()`/`from_dict()`: Deserialize JSON/dict to class instance
+  - `to_json()`/`dict()`: Serialize instance to JSON/dict
+  - `json_schema()`: Generate JSON Schema Draft 7 for the class
+  - `set_decoder_resolver()`/`set_encoder_resolver()`/`set_schema_resolver()`: Register custom resolvers
+
+- **`kobject/fields.py`**: `FieldMeta` dataclass representing a class field with pre-processed metadata (name, annotation, required, default value).
+
+- **`kobject/serialization.py`**: `JSONEncoder`/`JSONDecoder` classes that handle custom type encoding/decoding via registered resolvers.
+
+- **`kobject/validation.py`**: Type validation logic used by `__post_init__`.
+
+- **`kobject/schema.py`**: JSON Schema generation containing:
+  - `DocstringMeta`: Dataclass for parsed docstring metadata (title, description, field descriptions, examples)
+  - `parse_docstring()`: Extracts metadata from reST-style docstrings
+  - `JSONSchemaGenerator`: Generates JSON Schema Draft 7 with support for custom type resolvers
 
 ## Key Patterns
 
 **Type Validation Flow**: Validation happens in `__post_init__` → `__validate_model()` which iterates through `_with_field_map()` fields and calls `_validate_field_value()` for each.
 
-**Supported Types**: Basic types, generics (List, Tuple, Dict), Union/Optional, Any, Callable, Coroutine, custom classes, and Enums.
+**Supported Types**: Basic types, generics (List, Tuple, Dict, Set), Union/Optional, Any, Callable, Coroutine, custom classes, and Enums.
 
-**Resolver System**: Custom types can be serialized/deserialized by registering resolvers:
+**Resolver System**: Custom types can be handled by registering resolvers:
 - `Kobject.set_decoder_resolver(type, lambda)` for deserialization
 - `Kobject.set_encoder_resolver(type, lambda)` for serialization
+- `Kobject.set_schema_resolver(type, lambda)` for JSON Schema generation
+
+**JSON Schema Generation**: The `json_schema()` method generates JSON Schema Draft 7 from class definitions. It extracts metadata from reST-style docstrings (`:param:`, `:example:`) and handles nested Kobjects via `$ref`/`$defs`.
 
 **Default Class Usage**: Must explicitly call `self.__post_init__()` at the end of `__init__`.
 
