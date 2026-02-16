@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Tuple, Dict
 from uuid import UUID
 
 from kobject import Kobject
@@ -20,12 +19,12 @@ class BaseB:
 class BaseC(Kobject):
     a_int: int
     a_str: str
-    a_list_of_int: List[int]
-    a_tuple_of_bool: Tuple[bool]
+    a_list_of_int: list[int]
+    a_tuple_of_bool: tuple[bool]
     a_base_a: BaseA
     a_base_b: BaseB
-    a_list_of_base_a: List[BaseA]
-    a_dict_str_b: Dict[str, BaseB]
+    a_list_of_base_a: list[BaseA]
+    a_dict_str_b: dict[str, BaseB]
 
 
 def test_to_dict():
@@ -98,8 +97,8 @@ def test_on_dict():
 class WithOptional(Kobject):
     a_int: int
     a_str: str | None
-    a_list: List[int | None]
-    a_dict: Dict[str, int | None]
+    a_list: list[int | None]
+    a_dict: dict[str, int | None]
 
 
 @dataclass

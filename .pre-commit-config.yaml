@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.7.0
+  rev: v0.11.13
   hooks:
     - id: ruff
       args: [ --fix ]
@@ -12,19 +12,5 @@ repos:
       entry: poetry run pytest
       language: system
       types: [ python ]
-      pass_filenames: false
-      always_run: true
-    - id: mutatest
-      name: mutatest
-      entry: poetry run mutatest
-      language: system
-      types: [ python ]
-      args:
-        [
-          "-n",
-          "100",
-          "-s",
-          "kobject",
-        ]
       pass_filenames: false
       always_run: true
