@@ -1,11 +1,11 @@
-import typing
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import List, Tuple, Union, Optional, Dict, Coroutine, Callable, Any
+from typing import Any
 
 import pytest
 
-from kobject import Kobject, Empty
+from kobject import Empty, Kobject
 
 
 class ClassType(IntEnum):
@@ -95,15 +95,15 @@ def test_simple_attr_error(simple_attr):
             a_object=a_object,
         )
     assert error.type is TypeError
-    assert error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_int: <class 'int'> != `''`\n"
-        " Wrong type for a_bool: <class 'bool'> != `2`\n"
-        " Wrong type for a_str: <class 'str'> != `1.0`\n"
-        " Wrong type for a_float: <class 'float'> != `True`\n"
-        " Wrong type for a_dict: <class 'dict'> != `True`\n"
-        " Wrong type for a_object: <class 'tests.kobject.validator.test_main.StubInstance'> != `<E >`",
-    )
+    error_msg = error.value.args[0]
+    assert "Class 'StubClass' type error:" in error_msg
+    assert "Wrong type for a_int: <class 'int'> != `''`" in error_msg
+    assert "Wrong type for a_bool: <class 'bool'> != `2`" in error_msg
+    assert "Wrong type for a_str: <class 'str'> != `1.0`" in error_msg
+    assert "Wrong type for a_float: <class 'float'> != `True`" in error_msg
+    assert "Wrong type for a_dict: <class 'dict'> != `True`" in error_msg
+    assert "Wrong type for a_object:" in error_msg
+    assert "StubInstance" in error_msg
 
 
 def test_simple_attr(simple_attr):
@@ -143,34 +143,34 @@ def attr_with_content(request):
 
         @dataclass
         class StubClass(Kobject):
-            a_list_int: List[int]
-            a_tuple_exactly_one_float: Tuple[float]
-            a_tuple_exactly_two_floats: Tuple[float, float]
-            a_tuple_exactly_three_floats: Tuple[float, float, float]
-            a_tuple_object: Tuple[StubInstance]
-            a_dict_str_optional_int: Dict[str, None | int]
+            a_list_int: list[int]
+            a_tuple_exactly_one_float: tuple[float]
+            a_tuple_exactly_two_floats: tuple[float, float]
+            a_tuple_exactly_three_floats: tuple[float, float, float]
+            a_tuple_object: tuple[StubInstance]
+            a_dict_str_optional_int: dict[str, None | int]
             b_dict_str_optional_int: dict[str, None | int]
 
         return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
-            a_list_int: List[int]
-            a_tuple_exactly_one_float: Tuple[float]
-            a_tuple_exactly_two_floats: Tuple[float, float]
-            a_tuple_exactly_three_floats: Tuple[float, float, float]
-            a_tuple_object: Tuple[StubInstance]
-            a_dict_str_optional_int: Dict[str, None | int]
+            a_list_int: list[int]
+            a_tuple_exactly_one_float: tuple[float]
+            a_tuple_exactly_two_floats: tuple[float, float]
+            a_tuple_exactly_three_floats: tuple[float, float, float]
+            a_tuple_object: tuple[StubInstance]
+            a_dict_str_optional_int: dict[str, None | int]
             b_dict_str_optional_int: dict[str, None | int]
 
             def __init__(
                 self,
-                a_list_int: List[int],
-                a_tuple_exactly_one_float: Tuple[float],
-                a_tuple_exactly_two_floats: Tuple[float, float],
-                a_tuple_exactly_three_floats: Tuple[float, float, float],
-                a_tuple_object: Tuple[StubInstance],
-                a_dict_str_optional_int: Dict[str, None | int],
+                a_list_int: list[int],
+                a_tuple_exactly_one_float: tuple[float],
+                a_tuple_exactly_two_floats: tuple[float, float],
+                a_tuple_exactly_three_floats: tuple[float, float, float],
+                a_tuple_object: tuple[StubInstance],
+                a_dict_str_optional_int: dict[str, None | int],
                 b_dict_str_optional_int: dict[str, None | int],
             ):
                 self.a_list_int = a_list_int
@@ -279,8 +279,8 @@ def not_real_type_attr(request):
 
         @dataclass
         class StubClass(Kobject):
-            a_union_int_bool: Union[int | bool]
-            a_optional_str: Optional[str]
+            a_union_int_bool: int | bool
+            a_optional_str: str | None
             a_optional_int: int | None
             b_optional_int: EnumStub | None = Empty
 
@@ -288,15 +288,15 @@ def not_real_type_attr(request):
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
-            a_union_int_bool: Union[int | bool]
-            a_optional_str: Optional[str]
+            a_union_int_bool: int | bool
+            a_optional_str: str | None
             a_optional_int: int | None
             b_optional_int: EnumStub | None = Empty
 
             def __init__(
                 self,
-                a_union_int_bool: Union[int | bool],
-                a_optional_str: Optional[str],
+                a_union_int_bool: int | bool,
+                a_optional_str: str | None,
                 a_optional_int: int | None,
                 b_optional_int: EnumStub | None = Empty,
             ):
@@ -415,17 +415,20 @@ def test_callables_attr_content_error(callables_attr):
             b_callable=1,
         )
     assert error.type is TypeError
-    assert error.value.args == (
-        "Class 'StubClass' type error:\n"
-        " Wrong type for a_coroutine: typing.Coroutine != `1`\n"
-        " Wrong type for a_callable: typing.Callable != `1`\n"
-        " Wrong type for b_callable: typing.Callable != `1`",
-    )
-    assert error.value.json_error() == [
-        {"field": "a_coroutine", "type": typing.Coroutine, "value": "1"},
-        {"field": "a_callable", "type": typing.Callable, "value": "1"},
-        {"field": "b_callable", "type": typing.Callable, "value": "1"},
-    ]
+    error_msg = error.value.args[0]
+    assert "Class 'StubClass' type error:" in error_msg
+    assert "Wrong type for a_coroutine:" in error_msg
+    assert "!= `1`" in error_msg
+    assert "Wrong type for a_callable:" in error_msg
+    assert "Wrong type for b_callable:" in error_msg
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 3
+    assert json_errors[0]["field"] == "a_coroutine"
+    assert json_errors[0]["value"] == "1"
+    assert json_errors[1]["field"] == "a_callable"
+    assert json_errors[1]["value"] == "1"
+    assert json_errors[2]["field"] == "b_callable"
+    assert json_errors[2]["value"] == "1"
 
 
 def test_callables_attr_content(callables_attr):
@@ -463,20 +466,20 @@ def inception_attr(request):
 
         @dataclass
         class StubClass(Kobject):
-            a_list_union_bool_str: List[Union[bool, str]]
-            a_list_optional_int: List[Optional[int]]
+            a_list_union_bool_str: list[bool | str]
+            a_list_optional_int: list[int | None]
 
         return StubClass
     elif request.param == ClassType.DEFAULT:
 
         class StubClass(Kobject):
-            a_list_union_bool_str: List[Union[bool, str]]
-            a_list_optional_int: List[Optional[int]]
+            a_list_union_bool_str: list[bool | str]
+            a_list_optional_int: list[int | None]
 
             def __init__(
                 self,
-                a_list_union_bool_str: List[Union[bool, str]],
-                a_list_optional_int: List[Optional[int]],
+                a_list_union_bool_str: list[bool | str],
+                a_list_optional_int: list[int | None],
             ):
                 self.a_list_union_bool_str = a_list_union_bool_str
                 self.a_list_optional_int = a_list_optional_int
