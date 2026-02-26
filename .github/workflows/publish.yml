@@ -1,13 +1,12 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event.release.target_commitish == 'main'
     steps:
       - uses: actions/checkout@v4
 
