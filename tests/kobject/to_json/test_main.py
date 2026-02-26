@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Tuple, Dict
 from uuid import UUID
 
 from kobject import Kobject
@@ -20,12 +19,12 @@ class BaseB:
 class BaseC(Kobject):
     a_int: int
     a_str: str
-    a_list_of_int: List[int]
-    a_tuple_of_bool: Tuple[bool]
+    a_list_of_int: list[int]
+    a_tuple_of_bool: tuple[bool]
     a_base_a: BaseA
     a_base_b: BaseB
-    a_list_of_base_a: List[BaseA]
-    a_dict_str_b: Dict[str, BaseB]
+    a_list_of_base_a: list[BaseA]
+    a_dict_str_b: dict[str, BaseB]
 
 
 def test_to_dict():
@@ -92,3 +91,77 @@ def test_on_dict():
     b_dict_repr = instance.dict()
     assert isinstance(a_dict_repr["a_datetime"], str)
     assert isinstance(b_dict_repr["a_datetime"], datetime)
+
+
+@dataclass
+class WithOptional(Kobject):
+    a_int: int
+    a_str: str | None
+    a_list: list[int | None]
+    a_dict: dict[str, int | None]
+
+
+@dataclass
+class NestedWithOptional(Kobject):
+    inner: WithOptional
+    value: str | None
+
+
+def test_dict_remove_nones_false_default():
+    instance = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None, 2],
+        a_dict={"a": 1, "b": None},
+    )
+    result = instance.dict()
+    assert result == {
+        "a_int": 1,
+        "a_str": None,
+        "a_list": [1, None, 2],
+        "a_dict": {"a": 1, "b": None},
+    }
+
+
+def test_dict_remove_nones_true():
+    instance = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None, 2],
+        a_dict={"a": 1, "b": None},
+    )
+    result = instance.dict(remove_nones=True)
+    assert result == {
+        "a_int": 1,
+        "a_list": [1, 2],
+        "a_dict": {"a": 1},
+    }
+
+
+def test_dict_remove_nones_recursive():
+    inner = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None],
+        a_dict={"a": None},
+    )
+    instance = NestedWithOptional(inner=inner, value=None)
+    result = instance.dict(remove_nones=True)
+    assert result == {
+        "inner": {
+            "a_int": 1,
+            "a_list": [1],
+            "a_dict": {},
+        },
+    }
+
+
+def test_to_json_remove_nones():
+    instance = WithOptional(
+        a_int=1,
+        a_str=None,
+        a_list=[1, None, 2],
+        a_dict={"a": 1, "b": None},
+    )
+    result = instance.to_json(remove_nones=True)
+    assert result == b'{"a_int":1,"a_list":[1,2],"a_dict":{"a":1}}'

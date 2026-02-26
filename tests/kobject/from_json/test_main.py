@@ -1,18 +1,22 @@
 import datetime
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntEnum
 from json import JSONDecodeError
-from typing import List, Tuple
 from uuid import UUID
 
 import pytest
 
-from kobject import Kobject
+from kobject import Empty, Kobject
+
+
+class EnumStub(IntEnum):
+    A = 1
 
 
 @dataclass
 class BaseA(Kobject):
     a_datetime: datetime.datetime
+    a_enum: None | EnumStub = Empty
 
 
 @dataclass
@@ -24,21 +28,21 @@ class BaseB:
 class BaseC(Kobject):
     a_int: int
     a_str: str
-    a_list_of_int: List[int]
-    a_tuple_of_bool: Tuple[bool]
+    a_list_of_int: list[int]
+    a_tuple_of_bool: tuple[bool]
     a_base_a: BaseA
     a_base_b: BaseB
-    a_list_of_base_a: List[BaseA]
+    a_list_of_base_a: list[BaseA]
     a_int_default_none: int = None
     a_list_field: list = field(default_factory=list)
 
 
 @dataclass
 class BaseD(Kobject):
-    a_list_of_int: List[int]
-    a_list_of_bool: List[bool]
-    a_list_of_float: List[float]
-    a_list_of_str: List[int]
+    a_list_of_int: list[int]
+    a_list_of_bool: list[bool]
+    a_list_of_float: list[float]
+    a_list_of_str: list[int]
 
 
 @dataclass
@@ -95,14 +99,22 @@ def test_from_json_unable_to_cast():
         b'"a_tuple_of_bool": [true],"a_base_a": {"a_date'
         b'time": "2023-02-01 17:38:45.389426"},"a_base_b": {"a_'
         b'uuid":"1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_lis'
-        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}],'
+        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426", "a_enum": 1}],'
         b' "a_int_default_none": null}'
     )
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=payload)
-    assert error.value.args == (
-        "Class 'BaseA' type error:\n Wrong type for a_datetime: <class 'datetime.datetime'> != '<class 'str'>'",
-    )
+    error_msg = error.value.args[0]
+    assert "Class 'BaseA' type error:" in error_msg
+    assert "Wrong type for a_datetime:" in error_msg
+    assert "datetime.datetime" in error_msg
+    assert error.value.json_error() == [
+        {
+            "field": "a_datetime",
+            "type": datetime.datetime,
+            "value": "'2023-02-01 17:38:45.389426'",
+        }
+    ]
     Kobject.set_content_check_custom_exception(Exception)
 
 
@@ -119,12 +131,16 @@ def test_from_json():
         if isinstance(value, dict)
         else value,
     )
+    Kobject.set_decoder_resolver(
+        IntEnum,
+        lambda attr_type, value: attr_type(value) if isinstance(value, int) else value,
+    )
     payload = (
         b'{"a_int": 1,"a_str": "lala","a_list_of_int": [1,2,3],'
         b'"a_tuple_of_bool": [true],"a_base_a": {"a_date'
         b'time": "2023-02-01 17:38:45.389426"},"a_base_b": {"a_'
         b'uuid":"1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_lis'
-        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}],'
+        b't_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426", "a_enum": 1}],'
         b' "a_int_default_none": null}'
     )
     instance = BaseC.from_json(payload=payload)
@@ -141,10 +157,25 @@ def test_from_json_empty_payload_custom_exception():
     Kobject.set_content_check_custom_exception(MyException)
     with pytest.raises(MyException) as error:
         BaseC.from_json(payload=b"{}")
-    assert error.value.args == (
-        "Missing content -> The fallow attr are not presente a_int, a_str, "
-        "a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_base_a",
-    )
+    error_msg = error.value.args[0]
+    assert "Missing content the follow attr are not present:" in error_msg
+    assert "a_int: <class 'int'> != `Empty`" in error_msg
+    assert "a_str: <class 'str'> != `Empty`" in error_msg
+    assert "a_list_of_int:" in error_msg and "!= `Empty`" in error_msg
+    assert "a_tuple_of_bool:" in error_msg
+    assert "a_base_a:" in error_msg
+    assert "a_base_b:" in error_msg
+    assert "a_list_of_base_a:" in error_msg
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 7
+    assert json_errors[0] == {"field": "a_int", "type": int, "value": "Empty"}
+    assert json_errors[1] == {"field": "a_str", "type": str, "value": "Empty"}
+    assert json_errors[2]["field"] == "a_list_of_int"
+    assert json_errors[2]["value"] == "Empty"
+    assert json_errors[3]["field"] == "a_tuple_of_bool"
+    assert json_errors[4]["field"] == "a_base_a"
+    assert json_errors[5]["field"] == "a_base_b"
+    assert json_errors[6]["field"] == "a_list_of_base_a"
     Kobject.set_content_check_custom_exception(None)
 
 
@@ -152,10 +183,24 @@ def test_from_json_empty_payload():
     Kobject.set_content_check_custom_exception(None)
     with pytest.raises(TypeError) as error:
         BaseC.from_json(payload=b"{}")
-    assert error.value.args == (
-        "Missing content -> The fallow attr are not presente a_int, a_str, "
-        "a_list_of_int, a_tuple_of_bool, a_base_a, a_base_b, a_list_of_base_a",
-    )
+    error_msg = error.value.args[0]
+    assert "Missing content the follow attr are not present:" in error_msg
+    assert "a_int: <class 'int'> != `Empty`" in error_msg
+    assert "a_str: <class 'str'> != `Empty`" in error_msg
+    assert "a_list_of_int:" in error_msg
+    assert "a_tuple_of_bool:" in error_msg
+    assert "a_base_a:" in error_msg
+    assert "a_base_b:" in error_msg
+    assert "a_list_of_base_a:" in error_msg
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 7
+    assert json_errors[0] == {"field": "a_int", "type": int, "value": "Empty"}
+    assert json_errors[1] == {"field": "a_str", "type": str, "value": "Empty"}
+    assert json_errors[2]["field"] == "a_list_of_int"
+    assert json_errors[3]["field"] == "a_tuple_of_bool"
+    assert json_errors[4]["field"] == "a_base_a"
+    assert json_errors[5]["field"] == "a_base_b"
+    assert json_errors[6]["field"] == "a_list_of_base_a"
 
 
 def test_from_json_wrong_type_expected_list():
@@ -169,13 +214,26 @@ def test_from_json_wrong_type_expected_list():
     )
     with pytest.raises(TypeError) as error:
         BaseD.from_json(payload=payload)
-    assert error.value.args == (
-        "Class 'BaseD' type error:\n"
-        " Wrong type for a_list_of_int: typing.List[int] != '<class 'NoneType'>'\n"
-        " Wrong type for a_list_of_bool: typing.List[bool] != '<class 'int'>'\n"
-        " Wrong type for a_list_of_float: typing.List[float] != '<class 'str'>'\n"
-        " Wrong type for a_list_of_str: typing.List[int] != '<class 'float'>'",
-    )
+    error_msg = error.value.args[0]
+    assert "Class 'BaseD' type error:" in error_msg
+    assert "Wrong type for a_list_of_int:" in error_msg
+    assert "!= `None`" in error_msg
+    assert "Wrong type for a_list_of_bool:" in error_msg
+    assert "!= `0`" in error_msg
+    assert "Wrong type for a_list_of_float:" in error_msg
+    assert "!= `'lala'`" in error_msg
+    assert "Wrong type for a_list_of_str:" in error_msg
+    assert "!= `1.3`" in error_msg
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 4
+    assert json_errors[0]["field"] == "a_list_of_int"
+    assert json_errors[0]["value"] == "None"
+    assert json_errors[1]["field"] == "a_list_of_bool"
+    assert json_errors[1]["value"] == "0"
+    assert json_errors[2]["field"] == "a_list_of_float"
+    assert json_errors[2]["value"] == "'lala'"
+    assert json_errors[3]["field"] == "a_list_of_str"
+    assert json_errors[3]["value"] == "1.3"
 
 
 def test_from_json_wrong_type_list():
@@ -191,11 +249,17 @@ def test_from_json_wrong_type_list():
         BaseE.from_json(payload=payload)
     assert error.value.args == (
         "Class 'BaseE' type error:\n"
-        " Wrong type for a_list_of_int: <class 'int'> != '<class 'list'>'\n"
-        " Wrong type for a_list_of_bool: <class 'bool'> != '<class 'list'>'\n"
-        " Wrong type for a_list_of_float: <class 'float'> != '<class 'list'>'\n"
-        " Wrong type for a_list_of_str: <class 'int'> != '<class 'list'>'",
+        " Wrong type for a_list_of_int: <class 'int'> != `[]`\n"
+        " Wrong type for a_list_of_bool: <class 'bool'> != `[]`\n"
+        " Wrong type for a_list_of_float: <class 'float'> != `[]`\n"
+        " Wrong type for a_list_of_str: <class 'int'> != `[]`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_list_of_int", "type": int, "value": "[]"},
+        {"field": "a_list_of_bool", "type": bool, "value": "[]"},
+        {"field": "a_list_of_float", "type": float, "value": "[]"},
+        {"field": "a_list_of_str", "type": int, "value": "[]"},
+    ]
 
 
 def test_from_json_error_enum_invalid_value():
@@ -203,8 +267,11 @@ def test_from_json_error_enum_invalid_value():
         BaseF.from_json(payload=b'{"a_stub_enum": 2,"b_stub_enum": null}')
     assert error.value.args == (
         "Class 'BaseF' type error:\n"
-        " Wrong type for a_stub_enum: <enum 'StubEnum'> != '<class 'int'>'",
+        " Wrong type for a_stub_enum: <enum 'StubEnum'> != `2`",
     )
+    assert error.value.json_error() == [
+        {"field": "a_stub_enum", "type": StubEnum, "value": "2"}
+    ]
 
 
 def test_from_json_enum_with_default_value():
@@ -216,17 +283,23 @@ def test_from_json_enum_with_default_value():
 def test_from_json_enum_with_default_value_set():
     obj = BaseF.from_json(payload=b'{"a_stub_enum": 1}')
     assert obj.a_stub_enum == StubEnum.LORO
-    assert obj.b_stub_enum == None
+    assert obj.b_stub_enum is None
 
 
 def test_from_json_tuple_invalid_value():
     with pytest.raises(TypeError) as error:
         BaseG.from_json(payload=b'{"a_tuple":null,"a_dict":null}')
-    assert error.value.args == (
-        "Class 'BaseG' type error:\n"
-        " Wrong type for a_tuple: tuple[int, int] != '<class 'NoneType'>'\n"
-        " Wrong type for a_dict: dict[str, tests.kobject.from_json.test_main.BaseB] != '<class 'NoneType'>'",
-    )
+    error_msg = error.value.args[0]
+    assert "Class 'BaseG' type error:" in error_msg
+    assert "Wrong type for a_tuple:" in error_msg
+    assert "!= `None`" in error_msg
+    assert "Wrong type for a_dict:" in error_msg
+    json_errors = error.value.json_error()
+    assert len(json_errors) == 2
+    assert json_errors[0]["field"] == "a_tuple"
+    assert json_errors[0]["value"] == "None"
+    assert json_errors[1]["field"] == "a_dict"
+    assert json_errors[1]["value"] == "None"
 
 
 def test_from_json_tuple_and_dict_cast():

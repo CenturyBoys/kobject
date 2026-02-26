@@ -76,8 +76,23 @@ instance = StubClass(a_list_int=[1, "", 2, ""], a_tuple_bool=["", True])
 Traceback (most recent call last):
 ...
 TypeError: Class 'StubClass' type error:
- Wrong type for a_list_int: typing.List[int] != '<class 'list'>'
- Wrong type for a_tuple_bool: typing.Tuple[bool] != '<class 'list'>'
+ Wrong type for a_list_int: typing.List[int] != `[1, '', 2, '']`
+ Wrong type for a_tuple_bool: typing.Tuple[bool] != `['', True]`
+```
+
+You can retrieve the structured error by calling `json_error` method
+
+```python
+try:
+    instance = StubClass(a_list_int=[1, "", 2, ""], a_tuple_bool=["", True])
+except TypeError as _error:
+    print(_error.json_error())
+```
+
+Output:
+
+```bash
+[{'field': 'a_list_int', 'type': typing.List[int], 'value': "[1, '', 2, '']"}, {'field': 'a_tuple_bool', 'type': typing.Tuple[bool], 'value': "['', True]"}]
 ```
 
 You can use lazy validation to improve performance, the code will stop in the first found error for this use
@@ -135,7 +150,7 @@ instance = StubClass(a__int="")
 Traceback (most recent call last):
 ...
 CustomException: Class 'StubClass' type error:
- Wrong type for a__int: <class 'int'> != '<class 'str'>'
+ Wrong type for a__int: <class 'int'> != `''`
 ```
 
 ### ToJSON
@@ -220,6 +235,52 @@ print(json_bytes)
 b'{"a_base_a": {"a_datetime": "2023-02-01 17:38:45.389426"}, "a_base_b": {"a_uuid": "1d9cf695-c917-49ce-854b-4063f0cda2e7"}, "a_list_of_base_a": [{"a_datetime": "2023-02-01 17:38:45.389426"}]}'
 ```
 
+#### Remove None values
+
+Both `dict()` and `to_json()` methods support the `remove_nones` parameter to recursively strip `None` values from the output.
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict
+
+from kobject import Kobject
+
+
+@dataclass
+class Inner(Kobject):
+    value: str | None
+
+
+@dataclass
+class Outer(Kobject):
+    a_int: int
+    a_str: str | None
+    a_list: List[int | None]
+    a_dict: Dict[str, int | None]
+    inner: Inner
+
+
+instance = Outer(
+    a_int=1,
+    a_str=None,
+    a_list=[1, None, 2],
+    a_dict={"a": 1, "b": None},
+    inner=Inner(value=None)
+)
+
+# Default behavior preserves None values
+print(instance.dict())
+# {'a_int': 1, 'a_str': None, 'a_list': [1, None, 2], 'a_dict': {'a': 1, 'b': None}, 'inner': {'value': None}}
+
+# With remove_nones=True, None values are recursively removed
+print(instance.dict(remove_nones=True))
+# {'a_int': 1, 'a_list': [1, 2], 'a_dict': {'a': 1}, 'inner': {}}
+
+# Also works with to_json()
+print(instance.to_json(remove_nones=True))
+# b'{"a_int":1,"a_list":[1,2],"a_dict":{"a":1},"inner":{}}'
+```
+
 ### FromJSON
 
 Kobject has his own implementation to parse JSON to a class instance.
@@ -300,4 +361,156 @@ print(instance)
 ```
 ```bash
 BaseC(a_base_a=BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426)), a_base_b=BaseB(a_uuid=UUID('1d9cf695-c917-49ce-854b-4063f0cda2e7')), a_list_of_base_a=[BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426))])
+```
+
+### JSON Schema
+
+Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+import json
+
+@dataclass
+class User(Kobject):
+    """
+    User model for the application.
+
+    :param name: The user's full name.
+    :param age: The user's age in years.
+    :param email: Optional email address.
+    :example: {"name": "Alice", "age": 30}
+    """
+    name: str
+    age: int
+    email: str | None = None
+
+schema = User.json_schema()
+print(json.dumps(schema, indent=2))
+```
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The user's full name."
+    },
+    "age": {
+      "type": "integer",
+      "description": "The user's age in years."
+    },
+    "email": {
+      "anyOf": [{"type": "string"}, {"type": "null"}],
+      "description": "Optional email address.",
+      "default": null
+    }
+  },
+  "additionalProperties": false,
+  "title": "User model for the application.",
+  "required": ["name", "age"],
+  "examples": [{"name": "Alice", "age": 30}]
+}
+```
+
+#### Docstring Metadata
+
+Kobject extracts metadata from reST-style docstrings:
+
+- **Title**: First line of the docstring
+- **Description**: Text between title and first directive (if different from title)
+- **Field descriptions**: `:param field_name: description`
+- **Examples**: `:example: {"json": "object"}`
+
+#### Supported Types
+
+| Python Type | JSON Schema |
+|-------------|-------------|
+| `str` | `{"type": "string"}` |
+| `int` | `{"type": "integer"}` |
+| `float` | `{"type": "number"}` |
+| `bool` | `{"type": "boolean"}` |
+| `None` | `{"type": "null"}` |
+| `list[T]` | `{"type": "array", "items": {...}}` |
+| `dict[K, V]` | `{"type": "object", "additionalProperties": {...}}` |
+| `tuple[X, Y]` | `{"type": "array", "prefixItems": [...], "minItems": N, "maxItems": N}` |
+| `set[T]` | `{"type": "array", "items": {...}, "uniqueItems": true}` |
+| `T \| None` | `{"anyOf": [{...}, {"type": "null"}]}` |
+| `Enum` | `{"type": "string/integer", "enum": [...]}` |
+| `Kobject` subclass | `{"$ref": "#/$defs/ClassName"}` |
+| `datetime` | `{"type": "string", "format": "date-time"}` |
+| `date` | `{"type": "string", "format": "date"}` |
+| `time` | `{"type": "string", "format": "time"}` |
+| `UUID` | `{"type": "string", "format": "uuid"}` |
+| `Decimal` | `{"type": "string", "pattern": "..."}` |
+
+#### Nested Kobjects
+
+Nested Kobject classes are handled using JSON Schema `$ref` and `$defs`:
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+
+@dataclass
+class Address(Kobject):
+    """
+    Address information.
+
+    :param street: Street name and number.
+    :param city: City name.
+    """
+    street: str
+    city: str
+
+@dataclass
+class Person(Kobject):
+    """
+    A person with an address.
+
+    :param name: Person's name.
+    :param address: Person's home address.
+    """
+    name: str
+    address: Address
+
+schema = Person.json_schema()
+# schema["properties"]["address"] == {"$ref": "#/$defs/Address", "description": "..."}
+# schema["$defs"]["Address"] contains the Address schema
+```
+
+#### Custom Schema Resolvers
+
+For custom types, you can register schema resolvers using `set_schema_resolver`:
+
+```python
+from dataclasses import dataclass
+from kobject import Kobject
+
+class Money:
+    def __init__(self, amount: int, currency: str):
+        self.amount = amount
+        self.currency = currency
+
+# Register a custom schema resolver
+Kobject.set_schema_resolver(
+    Money,
+    lambda t: {
+        "type": "object",
+        "properties": {
+            "amount": {"type": "integer"},
+            "currency": {"type": "string", "minLength": 3, "maxLength": 3}
+        },
+        "required": ["amount", "currency"]
+    }
+)
+
+@dataclass
+class Invoice(Kobject):
+    total: Money
+
+schema = Invoice.json_schema()
+# schema["properties"]["total"] contains the custom Money schema
 ```
