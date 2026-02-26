@@ -11,7 +11,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from inspect import isclass
-from typing import Any, ClassVar, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Any, ClassVar, Union, get_args, get_origin
+
+if TYPE_CHECKING:
+    from kobject.core import Kobject
 
 # Type alias for schema resolver callback
 SchemaResolverCallback = Callable[[type[Any]], dict[str, Any]]
@@ -320,20 +323,25 @@ class JSONSchemaGenerator:
         return {}
 
     @classmethod
-    def _generate_object_schema(
+    def _build_properties_and_required(
         cls,
-        klass: type,
+        klass: type[Kobject],
         defs: dict[str, dict[str, Any]],
         processed: set[type],
-    ) -> dict[str, Any]:
-        """Generate the object schema for a Kobject class (without $defs)."""
-        from kobject.core import Kobject
+    ) -> tuple[dict[str, Any], list[str]]:
+        """
+        Build properties dict and required list for a Kobject class.
 
-        if not issubclass(klass, Kobject):
-            return {}
+        Args:
+            klass: The Kobject class to process
+            defs: Dictionary to accumulate $defs for nested Kobjects
+            processed: Set of types already processed (cycle detection)
 
-        docstring_meta = parse_docstring(klass.__doc__)
+        Returns:
+            Tuple of (properties dict, required fields list)
+        """
         fields = klass._with_field_map()
+        docstring_meta = parse_docstring(klass.__doc__)
 
         properties: dict[str, Any] = {}
         required: list[str] = []
@@ -347,7 +355,6 @@ class JSONSchemaGenerator:
 
             # Add default value if present
             if fld.have_default_value:
-                # Only add serializable defaults
                 default_val = fld.default
                 if isinstance(
                     default_val, str | int | float | bool | type(None) | list | dict
@@ -357,6 +364,25 @@ class JSONSchemaGenerator:
                 required.append(fld.name)
 
             properties[fld.name] = prop_schema
+
+        return properties, required
+
+    @classmethod
+    def _generate_object_schema(
+        cls,
+        klass: type,
+        defs: dict[str, dict[str, Any]],
+        processed: set[type],
+    ) -> dict[str, Any]:
+        """Generate the object schema for a Kobject class (without $defs)."""
+        from kobject.core import Kobject
+
+        if not issubclass(klass, Kobject):
+            return {}
+
+        properties, required = cls._build_properties_and_required(
+            klass, defs, processed
+        )
 
         schema: dict[str, Any] = {
             "type": "object",
@@ -388,31 +414,10 @@ class JSONSchemaGenerator:
         defs: dict[str, dict[str, Any]] = {}
         processed: set[type] = {klass}
 
-        # Parse docstring for metadata
+        properties, required = cls._build_properties_and_required(
+            klass, defs, processed
+        )
         docstring_meta = parse_docstring(klass.__doc__)
-        fields = klass._with_field_map()
-
-        properties: dict[str, Any] = {}
-        required: list[str] = []
-
-        for fld in fields:
-            prop_schema = cls.get_schema_for_type(fld.annotation, defs, processed)
-
-            # Add field description from docstring
-            if fld.name in docstring_meta.field_descriptions:
-                prop_schema["description"] = docstring_meta.field_descriptions[fld.name]
-
-            # Add default value if present
-            if fld.have_default_value:
-                default_val = fld.default
-                if isinstance(
-                    default_val, str | int | float | bool | type(None) | list | dict
-                ):
-                    prop_schema["default"] = default_val
-            else:
-                required.append(fld.name)
-
-            properties[fld.name] = prop_schema
 
         schema: dict[str, Any] = {
             "$schema": "http://json-schema.org/draft-07/schema#",

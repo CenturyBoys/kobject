@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import types
 from inspect import Parameter
 from typing import Any, Union, get_origin
 
@@ -18,9 +17,3 @@ def is_special_form_union(annotation: Any) -> bool:
     """Check if annotation is Union or Optional."""
     origin = get_origin(annotation)
     return origin is Union
-
-
-def is_union_type(annotation: Any) -> bool:
-    """Check for both typing.Union and types.UnionType (X | Y syntax)."""
-    origin = get_origin(annotation)
-    return origin is Union or isinstance(annotation, types.UnionType)

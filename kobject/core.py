@@ -20,7 +20,10 @@ from kobject.serialization import (
 )
 from kobject.validation import _validate_field_value
 
-T = TypeVar("T")
+T = TypeVar("T", bound="Kobject")
+
+# Alias to avoid shadowing by the dict() method
+_Dict = dict
 
 
 class Kobject:
@@ -82,10 +85,8 @@ class Kobject:
                 if self.__lazy_type_check__:
                     break
         if _errors:
-            exception = self.__custom_exception__
-            if self.__custom_exception__ is None:
-                exception = TypeError
-            _exception = exception(
+            exception_class: type[Exception] = self.__custom_exception__ or TypeError
+            _exception = exception_class(
                 "Class '{}' type error:\n {}".format(
                     self.__class__.__name__,
                     "\n ".join(
@@ -105,7 +106,7 @@ class Kobject:
         object.__setattr__(exception, "__structured_validation_errors__", errors)
 
         def json_error(self: Exception) -> list[dict[str, Any]]:
-            return self.__structured_validation_errors__  # type: ignore[attr-defined]
+            return self.__structured_validation_errors__  # type: ignore[attr-defined, no-any-return]
 
         exception.json_error = types.MethodType(json_error, exception)  # type: ignore[attr-defined]
 
@@ -294,7 +295,7 @@ class Kobject:
                 )
 
         if _missing:
-            _exception = TypeError(
+            _type_error = TypeError(
                 "Missing content the follow attr are not present:\n{}".format(
                     "\n".join(
                         ["{field}: {type} != `{value}`".format(**_e) for _e in _missing]
@@ -302,17 +303,17 @@ class Kobject:
                 )
             )
 
-            _exception = cls._enriched_error(_exception, _missing)
+            _exception = cls._enriched_error(_type_error, _missing)
             raise _exception
         return cls(**_dict_repr)
 
-    def dict(self, remove_nones: bool = False) -> dict[str, Any]:
+    def dict(self, remove_nones: bool = False) -> _Dict[str, Any]:
         """
         Returns dict representation of your object.
         """
         return self._dict(resolver=JSONEncoder.dict_default, remove_nones=remove_nones)
 
-    def to_dict(self, remove_nones: bool = False) -> dict[str, Any]:
+    def to_dict(self, remove_nones: bool = False) -> _Dict[str, Any]:
         """
         Returns dict representation of your object.
         """
@@ -330,7 +331,7 @@ class Kobject:
 
     def _dict(
         self, resolver: Callable[[Any], Any], remove_nones: bool = False
-    ) -> dict[str, Any]:
+    ) -> _Dict[str, Any]:
         def resolve(obj: Any) -> Any:
             if isinstance(obj, Kobject):
                 return obj.dict(remove_nones=remove_nones)

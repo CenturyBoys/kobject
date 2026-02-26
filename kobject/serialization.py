@@ -145,7 +145,7 @@ def _resolve_tuple(_type: type[Any], attr_value: Any) -> tuple[Any, ...]:
     return tuple(attr_value_new)
 
 
-def _resolve_dict(_type: type[Any], attr_value: Any) -> dict[Any, Any]:
+def _resolve_dict(_type: type[Any], attr_value: dict[Any, Any]) -> dict[Any, Any]:
     """Resolve a dict type from JSON."""
     _typed_dict = hasattr(_type, "__args__")
     if not _typed_dict:

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kobject"
-version = "0.6.6"
+version = "0.7.1"
 description = "Know your object is a attribute type checker"
 authors = ["Marco Sievers de Almeida Ximit Gaia <im.ximit@gmail.com>"]
 license = "Apache License 2.0"
@@ -20,6 +20,14 @@ mypy = "^1.8"
 mutatest = "^3.1.0"
 pre-commit = "^3.5.0"
 ruff = "^0.11.13"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2"
+sphinx-rtd-theme = "^2.0"
+sphinx-autodoc-typehints = "^1.25"
 
 [tool.poetry.urls]
 homepage = "https://github.com/CenturyBoys/kobject"
