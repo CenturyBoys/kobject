@@ -77,6 +77,24 @@ def _validate_list(field: FieldMeta, value: Any) -> bool:
     return True
 
 
+def _validate_set(field: FieldMeta, value: Any) -> bool:
+    """Validate a Set type field."""
+    for item in value:
+        is_item_valid = False
+        for type_options in field.annotation.__args__:
+            if (
+                _validate_field_value(
+                    item, FieldMeta.get_generic_field_meta(type_options)
+                )
+                is True
+            ):
+                is_item_valid = True
+                break
+        if is_item_valid is False:
+            return is_item_valid
+    return True
+
+
 def _validate_field_value(value: Any, field: FieldMeta) -> bool:
     """Validate a field value against its type annotation."""
     if value == field.default or field.annotation in (Ellipsis, Any):
@@ -102,6 +120,9 @@ def _validate_field_value(value: Any, field: FieldMeta) -> bool:
 
     elif issubclass(field.annotation.__origin__, tuple):
         _is_valid = _validate_tuple(field, value)
+
+    elif issubclass(field.annotation.__origin__, set):
+        _is_valid = _validate_set(field, value)
 
     else:
         # For other generic types without specific handlers, accept the value

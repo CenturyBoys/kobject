@@ -16,6 +16,7 @@ from kobject.serialization import (
     _checker,
     _resolve_dict,
     _resolve_list,
+    _resolve_set,
     _resolve_tuple,
 )
 from kobject.validation import _validate_field_value
@@ -274,7 +275,7 @@ class Kobject:
             if base_type is type(None) and attr_value is None:
                 _dict_repr[field.name] = attr_value
 
-            elif _checker(base_type, list | tuple | dict) is False:
+            elif _checker(base_type, list | tuple | dict | set) is False:
                 _dict_repr[field.name] = JSONDecoder.type_caster(
                     attr_type=field.annotation, attr_value=attr_value
                 )
@@ -286,6 +287,11 @@ class Kobject:
 
             elif _checker(base_type, tuple) and isinstance(attr_value, list):
                 _dict_repr[field.name] = _resolve_tuple(
+                    _type=field.annotation, attr_value=attr_value
+                )
+
+            elif _checker(base_type, set) and isinstance(attr_value, list):
+                _dict_repr[field.name] = _resolve_set(
                     _type=field.annotation, attr_value=attr_value
                 )
 
@@ -345,10 +351,10 @@ class Kobject:
             if remove_nones and attr_value is None:
                 continue
 
-            if not isinstance(attr_value, list | tuple | dict):
+            if not isinstance(attr_value, list | tuple | dict | set):
                 _dict_representation.update({field.name: resolve(attr_value)})
                 continue
-            if isinstance(attr_value, list | tuple):
+            if isinstance(attr_value, list | tuple | set):
                 attr_value_new: list[Any] = []
                 for attr_value_item in attr_value:
                     if remove_nones and attr_value_item is None:

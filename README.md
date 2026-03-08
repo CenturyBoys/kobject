@@ -58,7 +58,7 @@ By default, dataclass calls ```self.__post_init__()``` at the end of the ```__in
 
 ### Exception
 
-Kobject raises ```TypeError``` with all validation errors, that means it checks all your object's attributes before raising the ```TypeError```. Types like List and Tuple will have all their elements checked.
+Kobject raises ```TypeError``` with all validation errors, that means it checks all your object's attributes before raising the ```TypeError```. Types like List, Tuple, and Set will have all their elements checked.
 
 ```python
 from dataclasses import dataclass
