@@ -65,6 +65,8 @@ def parse_docstring(docstring: str | None) -> DocstringMeta:
     in_description = True
     current_param: str | None = None
     current_param_lines: list[str] = []
+    current_example_lines: list[str] = []
+    in_example = False
 
     param_pattern = re.compile(r":param\s+(\w+):\s*(.*)")
     example_pattern = re.compile(r":example:\s*(.*)")
@@ -76,6 +78,16 @@ def parse_docstring(docstring: str | None) -> DocstringMeta:
         current_param = None
         current_param_lines = []
 
+    def flush_example() -> None:
+        nonlocal current_example_lines, in_example
+        if current_example_lines:
+            example_text = "".join(current_example_lines).strip()
+            if example_text:
+                with contextlib.suppress(json.JSONDecodeError):
+                    examples.append(json.loads(example_text))
+        current_example_lines = []
+        in_example = False
+
     for line in lines[line_idx:]:
         stripped = line.strip()
 
@@ -83,6 +95,7 @@ def parse_docstring(docstring: str | None) -> DocstringMeta:
         param_match = param_pattern.match(stripped)
         if param_match:
             flush_param()
+            flush_example()
             in_description = False
             current_param = param_match.group(1)
             param_text = param_match.group(2).strip()
@@ -94,17 +107,24 @@ def parse_docstring(docstring: str | None) -> DocstringMeta:
         example_match = example_pattern.match(stripped)
         if example_match:
             flush_param()
+            flush_example()
             in_description = False
+            in_example = True
             example_text = example_match.group(1).strip()
             if example_text:
-                with contextlib.suppress(json.JSONDecodeError):
-                    examples.append(json.loads(example_text))
+                current_example_lines.append(example_text)
             continue
 
         # Check for other directives (stop description)
         if stripped.startswith(":"):
             flush_param()
+            flush_example()
             in_description = False
+            continue
+
+        # Continuation of current example
+        if in_example and stripped:
+            current_example_lines.append(stripped)
             continue
 
         # Continuation of current param
@@ -117,6 +137,7 @@ def parse_docstring(docstring: str | None) -> DocstringMeta:
             description_lines.append(stripped)
 
     flush_param()
+    flush_example()
 
     description: str | None = None
     if description_lines:
@@ -383,6 +404,7 @@ class JSONSchemaGenerator:
         properties, required = cls._build_properties_and_required(
             klass, defs, processed
         )
+        docstring_meta = parse_docstring(klass.__doc__)
 
         schema: dict[str, Any] = {
             "type": "object",
@@ -390,8 +412,20 @@ class JSONSchemaGenerator:
             "additionalProperties": False,
         }
 
+        if docstring_meta.title:
+            schema["title"] = docstring_meta.title
+
+        if (
+            docstring_meta.description
+            and docstring_meta.description != docstring_meta.title
+        ):
+            schema["description"] = docstring_meta.description
+
         if required:
             schema["required"] = required
+
+        if docstring_meta.examples:
+            schema["examples"] = docstring_meta.examples
 
         return schema
 
