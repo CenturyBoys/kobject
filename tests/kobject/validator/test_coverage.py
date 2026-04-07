@@ -171,3 +171,75 @@ class TestEdgeCases:
         obj = Container(items=[], data={}, pair=())
         assert obj.items == []
         assert obj.data == {}
+
+
+class TestParameterizedGenericUnion:
+    """Tests for parameterized generic types in union (e.g., list[str] | None)."""
+
+    def test_optional_list_with_none(self):
+        """Test list[str] | None with None value."""
+
+        @dataclass
+        class Container(Kobject):
+            items: list[str] | None
+
+        obj = Container(items=None)
+        assert obj.items is None
+
+    def test_optional_list_with_value(self):
+        """Test list[str] | None with list value."""
+
+        @dataclass
+        class Container(Kobject):
+            items: list[str] | None
+
+        obj = Container(items=["a", "b", "c"])
+        assert obj.items == ["a", "b", "c"]
+
+    def test_optional_list_with_wrong_type(self):
+        """Test list[str] | None rejects invalid type."""
+
+        @dataclass
+        class Container(Kobject):
+            items: list[str] | None
+
+        with pytest.raises(TypeError) as exc:
+            Container(items="not a list")
+
+        assert "items" in str(exc.value)
+
+    def test_optional_dict_with_none(self):
+        """Test dict[str, int] | None with None value."""
+
+        @dataclass
+        class Container(Kobject):
+            data: dict[str, int] | None
+
+        obj = Container(data=None)
+        assert obj.data is None
+
+    def test_optional_dict_with_value(self):
+        """Test dict[str, int] | None with dict value."""
+
+        @dataclass
+        class Container(Kobject):
+            data: dict[str, int] | None
+
+        obj = Container(data={"a": 1, "b": 2})
+        assert obj.data == {"a": 1, "b": 2}
+
+    def test_complex_union_with_generics(self):
+        """Test union of multiple parameterized generics."""
+
+        @dataclass
+        class Container(Kobject):
+            value: list[int] | dict[str, int] | None
+
+        obj_list = Container(value=[1, 2, 3])
+        assert obj_list.value == [1, 2, 3]
+
+        obj_dict = Container(value={"a": 1})
+        assert obj_dict.value == {"a": 1}
+
+        obj_none = Container(value=None)
+        assert obj_none.value is None
