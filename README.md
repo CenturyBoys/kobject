@@ -13,6 +13,12 @@
 Know your object is a __init__ type validator for class and dataclass
 ```
 
+[![CI](https://github.com/CenturyBoys/kobject/actions/workflows/ci.yml/badge.svg)](https://github.com/CenturyBoys/kobject/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/CenturyBoys/kobject/branch/main/graph/badge.svg)](https://codecov.io/gh/CenturyBoys/kobject)
+[![PyPI](https://badge.fury.io/py/kobject.svg)](https://pypi.org/project/kobject/)
+[![Python](https://img.shields.io/pypi/pyversions/kobject.svg)](https://pypi.org/project/kobject/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 ## Usage
 
 Kobject can be use inside default class declaration and with dataclasses. Kobject uses the ```__init__``` signature to check types.
