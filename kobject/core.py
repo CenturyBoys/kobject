@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import sys
 import types
 from collections.abc import Callable
 from inspect import Signature
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar, get_type_hints
 
 from kobject.fields import FieldMeta
 from kobject.schema import JSONSchemaGenerator
@@ -57,11 +58,23 @@ class Kobject:
         """
         if cls.__field_map.get(cls) is None:
             cls.__field_map[cls] = []
+
+            # Resolve string annotations (from __future__ import annotations / PEP 563)
+            module = sys.modules.get(cls.__module__)
+            globalns = vars(module) if module else {}
+            try:
+                hints = get_type_hints(cls.__init__, globalns=globalns)
+            except Exception:
+                try:
+                    hints = get_type_hints(cls, globalns=globalns)
+                except Exception:
+                    hints = {}
+
             for param in Signature.from_callable(cls).parameters.values():
                 cls.__field_map[cls].append(
                     FieldMeta.new_one(
                         name=param.name,
-                        annotation=param.annotation,
+                        annotation=hints.get(param.name, param.annotation),
                         value=param.default,
                     )
                 )
