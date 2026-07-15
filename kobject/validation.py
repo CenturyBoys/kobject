@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, get_args
 
-from kobject._compat import is_generic_alias, is_special_form_union
+from kobject._compat import is_generic_alias, is_literal, is_special_form_union
 from kobject.fields import FieldMeta
+
+
+def _validate_literal(value: Any, args: tuple[Any, ...]) -> bool:
+    """Validate a Literal type field.
+
+    Match on equality *and* type identity so the True == 1 / False == 0
+    pitfall does not let a bool satisfy Literal[1] (or vice versa). PEP 586.
+    """
+    return any(type(value) is type(arg) and value == arg for arg in args)
 
 
 def _validate_special_form(field: FieldMeta, value: Any) -> bool:
@@ -105,6 +114,9 @@ def _validate_field_value(value: Any, field: FieldMeta) -> bool:
 
     elif is_special_form_union(field.annotation):
         _is_valid = _validate_special_form(field, value)
+
+    elif is_literal(field.annotation):
+        _is_valid = _validate_literal(value, get_args(field.annotation))
 
     elif not isinstance(
         value,

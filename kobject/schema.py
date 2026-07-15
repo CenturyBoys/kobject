@@ -13,6 +13,8 @@ from enum import Enum, IntEnum
 from inspect import isclass
 from typing import TYPE_CHECKING, Any, ClassVar, Union, get_args, get_origin
 
+from kobject._compat import is_literal
+
 if TYPE_CHECKING:
     from kobject.core import Kobject
 
@@ -262,6 +264,17 @@ class JSONSchemaGenerator:
         # Handle Any
         if attr_type is Any:
             return {}
+
+        # Handle Literal
+        if is_literal(attr_type):
+            values = list(get_args(attr_type))
+            if all(isinstance(v, bool) for v in values):
+                return {"type": "boolean", "enum": values}
+            if all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+                return {"type": "integer", "enum": values}
+            if all(isinstance(v, str) for v in values):
+                return {"type": "string", "enum": values}
+            return {"enum": values}
 
         # Handle Enum
         if isclass(attr_type) and issubclass(attr_type, Enum):

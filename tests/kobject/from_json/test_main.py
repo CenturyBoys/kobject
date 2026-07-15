@@ -2,6 +2,7 @@ import datetime
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from json import JSONDecodeError
+from typing import Literal
 from uuid import UUID
 
 import pytest
@@ -439,3 +440,28 @@ def test_from_json_union_round_trip():
     instance = UnionInDict.from_dict({"values": {"x": {"b": 2}}})
     restored = UnionInDict.from_json(instance.to_json())
     assert restored.values == {"x": UnionB(b=2)}
+
+
+@dataclass
+class LiteralStub(Kobject):
+    mode: Literal["a", "b"]
+    level: Literal[1, 2] = 1
+
+
+def test_from_dict_literal_valid():
+    instance = LiteralStub.from_dict({"mode": "b", "level": 2})
+    assert instance.mode == "b"
+    assert instance.level == 2
+
+
+def test_from_dict_literal_out_of_set():
+    with pytest.raises(TypeError) as error:
+        LiteralStub.from_dict({"mode": "x"})
+    assert "Wrong type for mode:" in error.value.args[0]
+
+
+def test_from_json_literal_round_trip():
+    instance = LiteralStub.from_dict({"mode": "a", "level": 2})
+    restored = LiteralStub.from_json(instance.to_json())
+    assert restored.mode == "a"
+    assert restored.level == 2

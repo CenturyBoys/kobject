@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum, IntEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import pytest
@@ -710,3 +710,43 @@ def test_concurrent_resolver_registration():
 
     assert len(errors) == 0
     assert len(registered) == 10
+
+
+def test_schema_literal_str():
+    @dataclass
+    class StubClass(Kobject):
+        mode: Literal["a", "b"]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["mode"] == {"type": "string", "enum": ["a", "b"]}
+    assert schema["required"] == ["mode"]
+
+
+def test_schema_literal_int():
+    @dataclass
+    class StubClass(Kobject):
+        level: Literal[1, 2]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["level"] == {"type": "integer", "enum": [1, 2]}
+
+
+def test_schema_literal_bool():
+    @dataclass
+    class StubClass(Kobject):
+        flag: Literal[True, False]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["flag"] == {"type": "boolean", "enum": [True, False]}
+
+
+def test_schema_literal_in_list():
+    @dataclass
+    class StubClass(Kobject):
+        modes: list[Literal["a", "b"]]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["modes"] == {
+        "type": "array",
+        "items": {"type": "string", "enum": ["a", "b"]},
+    }

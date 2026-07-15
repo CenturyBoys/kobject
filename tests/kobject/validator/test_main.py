@@ -1,7 +1,7 @@
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -649,3 +649,87 @@ def test_lazy_validator_off(lazy_validator):
         {"field": "a_bool", "type": bool, "value": "''"},
         {"field": "b_bool", "type": bool, "value": "''"},
     ]
+
+
+@pytest.fixture(
+    params=[
+        ClassType.DATACLASS,
+        ClassType.DEFAULT,
+    ]
+)
+def literal_attr(request):
+    if request.param == ClassType.DATACLASS:
+
+        @dataclass
+        class StubClass(Kobject):
+            mode: Literal["a", "b"]
+
+        return StubClass
+    elif request.param == ClassType.DEFAULT:
+
+        class StubClass(Kobject):
+            mode: Literal["a", "b"]
+
+            def __init__(self, mode: Literal["a", "b"]):
+                self.mode = mode
+                self.__post_init__()
+
+        return StubClass
+
+
+def test_literal_valid(literal_attr):
+    assert literal_attr(mode="a").mode == "a"
+    assert literal_attr(mode="b").mode == "b"
+
+
+def test_literal_out_of_set(literal_attr):
+    with pytest.raises(TypeError) as error:
+        literal_attr(mode="x")
+    assert "Wrong type for mode:" in error.value.args[0]
+
+
+def test_literal_wrong_type(literal_attr):
+    with pytest.raises(TypeError) as error:
+        literal_attr(mode=1)
+    assert "Wrong type for mode:" in error.value.args[0]
+
+
+def test_literal_int_rejects_bool():
+    @dataclass
+    class StubClass(Kobject):
+        flag: Literal[1, 2]
+
+    assert StubClass(flag=1).flag == 1
+    with pytest.raises(TypeError):
+        StubClass(flag=True)
+
+
+def test_literal_bool_rejects_int():
+    @dataclass
+    class StubClass(Kobject):
+        flag: Literal[True]
+
+    assert StubClass(flag=True).flag is True
+    with pytest.raises(TypeError):
+        StubClass(flag=1)
+
+
+def test_literal_in_list():
+    @dataclass
+    class StubClass(Kobject):
+        modes: list[Literal["a", "b"]]
+
+    assert StubClass(modes=["a", "b", "a"]).modes == ["a", "b", "a"]
+    with pytest.raises(TypeError):
+        StubClass(modes=["a", "x"])
+
+
+def test_literal_in_union():
+    @dataclass
+    class StubClass(Kobject):
+        value: Literal["a", "b"] | int
+
+    assert StubClass(value="a").value == "a"
+    assert StubClass(value=10).value == 10
+    with pytest.raises(TypeError):
+        StubClass(value="x")
