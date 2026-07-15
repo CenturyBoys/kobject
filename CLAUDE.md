@@ -21,13 +21,19 @@ pytest tests/kobject/validator/test_main.py
 # Run a specific test
 pytest tests/kobject/validator/test_main.py::test_simple_attr -v
 
-# Lint and format (via pre-commit)
-ruff check --fix .
-ruff format .
+# Lint, format, type-check (mirrors the CI `lint` job)
+ruff check .
+ruff format --check .
+mypy kobject/
 
-# Run mutation testing (used in pre-commit)
+# Run all pre-commit hooks (ruff --fix, ruff-format, pytest)
+pre-commit run --all-files
+
+# Mutation testing (standalone; not part of pre-commit or CI)
 mutatest -n 100 -s kobject
 ```
+
+CI (`.github/workflows/ci.yml`) runs the lint job (ruff check, ruff format --check, mypy) plus a test matrix across Python 3.10/3.11/3.12. `pyproject.toml` enforces strict mypy (`disallow_untyped_defs`) and a broad ruff rule set (`E,F,W,I,UP,B,C4,SIM,RUF`).
 
 ## Architecture
 
@@ -42,6 +48,9 @@ The library is organized into the following modules:
   - `to_json()`/`dict()`: Serialize instance to JSON/dict
   - `json_schema()`: Generate JSON Schema Draft 7 for the class
   - `set_decoder_resolver()`/`set_encoder_resolver()`/`set_schema_resolver()`: Register custom resolvers
+  - `set_lazy_type_check()`, `set_validation_custom_exception()`, `set_content_check_custom_exception()`: Class-level config toggles (all mutate class state — see the resolver-state caveat below)
+
+- **`kobject/_compat.py`**: Compatibility helpers that avoid importing private Python internals — `is_generic_alias()`, `is_special_form_union()` (Union/Optional/`X | Y`), and the `EMPTY` sentinel. Use these instead of touching `typing`/`types` internals directly.
 
 - **`kobject/fields.py`**: `FieldMeta` dataclass representing a class field with pre-processed metadata (name, annotation, required, default value).
 
@@ -69,4 +78,6 @@ The library is organized into the following modules:
 
 **Default Class Usage**: Must explicitly call `self.__post_init__()` at the end of `__init__`.
 
-**Test Structure**: Tests use pytest fixtures with `ClassType` enum to parameterize between dataclass and default class implementations.
+**Global Resolver State**: Resolvers and config toggles live on class-level containers (`JSONDecoder.types_resolver`, `JSONEncoder.base_types_resolver`, `JSONSchemaGenerator.schema_resolvers`, and `Kobject`'s config flags). They persist across the process, so registering one in a test leaks into others. `tests/conftest.py` provides two autouse fixtures (`reset_resolvers`, `reset_kobject_config`) that snapshot and restore this state around every test — rely on them rather than manually cleaning up.
+
+**Test Structure**: Tests use pytest fixtures with a `ClassType` enum (see `tests/kobject/validator/test_main.py`) to parameterize each case across both dataclass and default-class implementations, so validation behavior is verified identically for both. Tests are grouped by feature area under `tests/kobject/` (`validator/`, `schema/`, `from_json/`, `to_json/`, `field_metadata/`).
