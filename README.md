@@ -683,3 +683,8 @@ class Invoice(Kobject):
 schema = Invoice.json_schema()
 # schema["properties"]["total"] contains the custom Money schema
 ```
+## Roadmap & design decisions
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what has recently shipped, what is deferred
+(e.g. field aliases, OpenAPI 3.1 output), and what is rejected by design (custom field
+validators and declarative value constraints) along with the rationale.
