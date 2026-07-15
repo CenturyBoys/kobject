@@ -584,3 +584,53 @@ def test_from_json_generic_round_trip():
     holder = GenIntHolder.from_dict({"box": {"value": 5}})
     restored = GenIntHolder.from_json(holder.to_json())
     assert restored == holder
+
+
+@dataclass(frozen=True)
+class NonUniformTagA(Kobject):
+    kind: Literal["a"]
+    x: int
+
+
+@dataclass(frozen=True)
+class NonUniformTagB(Kobject):
+    kind: str  # same field name but NOT a Literal -> not a discriminator
+    y: int
+
+
+@dataclass(frozen=True)
+class NonUniformHolder(Kobject):
+    v: NonUniformTagA | NonUniformTagB
+
+
+def test_tagged_union_non_uniform_members_fall_back_to_first_match():
+    # Not all members share a Literal tag field, so there is no discriminator;
+    # resolution falls back to declaration order.
+    holder = NonUniformHolder.from_dict({"v": {"kind": "a", "x": 1}})
+    assert holder.v == NonUniformTagA(kind="a", x=1)
+    holder = NonUniformHolder.from_dict({"v": {"kind": "other", "y": 2}})
+    assert holder.v == NonUniformTagB(kind="other", y=2)
+
+
+@dataclass(frozen=True)
+class DupTagA(Kobject):
+    kind: Literal["same"]
+    a: int
+
+
+@dataclass(frozen=True)
+class DupTagB(Kobject):
+    kind: Literal["same"]
+    b: int
+
+
+@dataclass(frozen=True)
+class DupTagHolder(Kobject):
+    v: DupTagA | DupTagB
+
+
+def test_tagged_union_duplicate_tag_is_ambiguous_falls_back():
+    # The tag value "same" is reused across members -> ambiguous -> no
+    # discriminator, so declaration order wins.
+    holder = DupTagHolder.from_dict({"v": {"kind": "same", "a": 1}})
+    assert holder.v == DupTagA(kind="same", a=1)
