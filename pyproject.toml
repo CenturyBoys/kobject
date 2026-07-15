@@ -1,6 +1,6 @@
 [project]
 name = "kobject"
-version = "0.7.5"
+version = "0.8.0"
 description = "Know your object is a attribute type checker"
 authors = [{ name = "Marco Sievers de Almeida Ximit Gaia", email = "im.ximit@gmail.com" }]
 requires-python = ">=3.10,<4"
