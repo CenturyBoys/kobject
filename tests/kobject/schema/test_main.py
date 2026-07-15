@@ -828,3 +828,48 @@ def test_schema_serialization_mode_propagates_to_nested():
 def test_schema_invalid_mode_raises():
     with pytest.raises(ValueError, match="validation"):
         WithDefaultField.json_schema(mode="nonsense")
+
+
+_WT = TypeVar("_WT")
+
+
+@dataclass
+class Wrapper(Kobject, Generic[_WT]):
+    value: _WT
+    maybe: _WT | None
+    tags: list[str]
+
+
+def test_schema_generic_substitutes_union_and_concrete_fields():
+    @dataclass
+    class Holder(Kobject):
+        wrapped: Wrapper[int]
+
+    props = Holder.json_schema()["properties"]["wrapped"]["properties"]
+    # TypeVar bound to int
+    assert props["value"] == {"type": "integer"}
+    # Union carrying the TypeVar is rebuilt as int | None
+    assert props["maybe"] == {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+    # Concrete generic field (no TypeVar) is preserved untouched
+    assert props["tags"] == {"type": "array", "items": {"type": "string"}}
+
+
+def test_schema_literal_mixed_types_falls_back_to_enum_only():
+    @dataclass
+    class StubClass(Kobject):
+        mixed: Literal["a", 1]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["mixed"] == {"enum": ["a", 1]}
+
+
+def test_schema_variable_length_tuple():
+    @dataclass
+    class StubClass(Kobject):
+        items: tuple[int, ...]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["items"] == {
+        "type": "array",
+        "items": {"type": "integer"},
+    }
