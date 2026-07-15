@@ -316,3 +316,126 @@ def test_from_json_tuple_and_dict_cast():
     assert obj.a_dict == {
         "m": BaseB(a_uuid=UUID("1d9cf695-c917-49ce-854b-4063f0cda2e7"))
     }
+
+
+# --- Union member discrimination during deserialization ---------------------
+
+
+@dataclass(frozen=True)
+class UnionA(Kobject):
+    a: str | int
+
+
+@dataclass(frozen=True)
+class UnionB(Kobject):
+    b: str | int
+
+
+@dataclass(frozen=True)
+class UnionOfKobjects(Kobject):
+    value: UnionA | UnionB
+
+
+class UnionOfKobjectsDefault(Kobject):
+    value: UnionA | UnionB
+
+    def __init__(self, value: UnionA | UnionB):
+        self.value = value
+        self.__post_init__()
+
+
+@pytest.fixture(params=[UnionOfKobjects, UnionOfKobjectsDefault])
+def union_of_kobjects_cls(request):
+    return request.param
+
+
+def test_from_dict_union_resolves_first_member(union_of_kobjects_cls):
+    instance = union_of_kobjects_cls.from_dict({"value": {"a": 1}})
+    assert instance.value == UnionA(a=1)
+
+
+def test_from_dict_union_resolves_second_member(union_of_kobjects_cls):
+    """Payload matching the second union member must resolve to it, not break."""
+    instance = union_of_kobjects_cls.from_dict({"value": {"b": 2}})
+    assert instance.value == UnionB(b=2)
+
+
+def test_from_dict_union_no_member_matches_raises_type_error(union_of_kobjects_cls):
+    with pytest.raises(TypeError) as error:
+        union_of_kobjects_cls.from_dict({"value": {"z": 9}})
+    error_msg = error.value.args[0]
+    assert "type error:" in error_msg
+    assert "Wrong type for value:" in error_msg
+
+
+@dataclass(frozen=True)
+class UnionWithNone(Kobject):
+    value: UnionA | None
+
+
+def test_from_dict_union_with_none():
+    assert UnionWithNone.from_dict({"value": None}).value is None
+    assert UnionWithNone.from_dict({"value": {"a": 1}}).value == UnionA(a=1)
+
+
+@dataclass(frozen=True)
+class UnionKobjectFirst(Kobject):
+    value: UnionA | int
+
+
+@dataclass(frozen=True)
+class UnionKobjectLast(Kobject):
+    value: int | UnionA
+
+
+def test_from_dict_union_with_primitive_both_orders():
+    assert UnionKobjectFirst.from_dict({"value": {"a": 1}}).value == UnionA(a=1)
+    assert UnionKobjectFirst.from_dict({"value": 5}).value == 5
+    assert UnionKobjectLast.from_dict({"value": {"a": 1}}).value == UnionA(a=1)
+    assert UnionKobjectLast.from_dict({"value": 5}).value == 5
+
+
+@dataclass(frozen=True)
+class UnionInList(Kobject):
+    values: list[UnionA | UnionB]
+
+
+def test_from_dict_union_in_list():
+    instance = UnionInList.from_dict({"values": [{"a": 1}, {"b": 2}]})
+    assert instance.values == [UnionA(a=1), UnionB(b=2)]
+
+
+@dataclass(frozen=True)
+class UnionInSet(Kobject):
+    values: set[UnionA | UnionB]
+
+
+def test_from_dict_union_in_set():
+    instance = UnionInSet.from_dict({"values": [{"b": 2}]})
+    assert instance.values == {UnionB(b=2)}
+
+
+@dataclass(frozen=True)
+class UnionInTuple(Kobject):
+    values: tuple[UnionA | UnionB, UnionA | UnionB]
+
+
+def test_from_dict_union_in_tuple():
+    instance = UnionInTuple.from_dict({"values": [{"b": 1}, {"a": 2}]})
+    assert instance.values == (UnionB(b=1), UnionA(a=2))
+
+
+@dataclass(frozen=True)
+class UnionInDict(Kobject):
+    values: dict[str, UnionA | UnionB]
+
+
+def test_from_dict_union_in_dict():
+    instance = UnionInDict.from_dict({"values": {"x": {"b": 2}, "y": {"a": 3}}})
+    assert instance.values == {"x": UnionB(b=2), "y": UnionA(a=3)}
+
+
+def test_from_json_union_round_trip():
+    instance = UnionInDict.from_dict({"values": {"x": {"b": 2}}})
+    restored = UnionInDict.from_json(instance.to_json())
+    assert restored.values == {"x": UnionB(b=2)}

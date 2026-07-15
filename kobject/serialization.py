@@ -55,12 +55,32 @@ class JSONDecoder:
         """
         Returns the result of casting attribute value to the attribute type.
         """
+        if is_union(attr_type):
+            return cls._cast_union(attr_type, attr_value)
         for map_attr_type, resolver in cls.types_resolver:
             if _checker(attr_type, map_attr_type):
-                for _type in get_args(attr_type):
-                    if issubclass(_type, map_attr_type):
-                        return resolver(_type, attr_value)
                 return resolver(attr_type, attr_value)
+        return attr_value
+
+    @classmethod
+    def _cast_union(cls, attr_type: type[Any], attr_value: Any) -> Any:
+        """
+        Cast a value for a Union type by trying each member in declaration order
+        and returning the first that successfully deserializes. There is no
+        ambiguity detection: if more than one member could match, the first
+        declared one wins.
+        """
+        # Local imports to avoid circular imports (same pattern as JSONEncoder).
+        from kobject.fields import FieldMeta
+        from kobject.validation import _validate_field_value
+
+        for member in get_args(attr_type):
+            try:
+                decoded = cls.type_caster(member, attr_value)
+            except Exception:
+                continue
+            if _validate_field_value(decoded, FieldMeta.get_generic_field_meta(member)):
+                return decoded
         return attr_value
 
 

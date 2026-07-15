@@ -369,6 +369,41 @@ print(instance)
 BaseC(a_base_a=BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426)), a_base_b=BaseB(a_uuid=UUID('1d9cf695-c917-49ce-854b-4063f0cda2e7')), a_list_of_base_a=[BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426))])
 ```
 
+#### Union types
+
+When a field is a union (e.g. ```A | B```, ```A | None```, ```A | int```), Kobject tries
+each member **in the order it is declared** and uses the **first one that deserializes
+successfully**. This also applies to unions used inside collections
+(```list[A | B]```, ```set[A | B]```, ```tuple[A | B, ...]```, ```dict[str, A | B]```).
+
+There is **no ambiguity detection**: if a payload could match more than one member, the
+first declared member wins.
+
+```python
+from dataclasses import dataclass
+
+from kobject import Kobject
+
+
+@dataclass
+class A(Kobject):
+    a: int
+
+
+@dataclass
+class B(Kobject):
+    b: int
+
+
+@dataclass
+class C(Kobject):
+    value: A | B
+
+
+print(C.from_dict({"value": {"a": 1}}).value)  # A(a=1)
+print(C.from_dict({"value": {"b": 2}}).value)  # B(b=2)
+```
+
 ### JSON Schema
 
 Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
