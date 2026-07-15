@@ -9,10 +9,63 @@ from collections.abc import Callable
 from inspect import isclass
 from typing import Any, ClassVar, Union, get_args, get_origin
 
+from kobject._compat import is_literal
+
 
 def is_union(attr_type: type | type[Any]) -> bool:
     """Check if attr_type is a Union type."""
     return get_origin(attr_type) is Union or isinstance(attr_type, types.UnionType)
+
+
+# Cache of detected discriminators keyed by the union type. The result is a pure
+# function of the union members, so caching never leaks test state.
+_discriminator_cache: dict[Any, tuple[str, dict[Any, type[Any]]] | None] = {}
+
+
+def _get_union_discriminator(
+    attr_type: type[Any],
+) -> tuple[str, dict[Any, type[Any]]] | None:
+    """Detect an automatic tag discriminator for a union of Kobject subclasses.
+
+    A discriminator is a field present on every Kobject member whose annotation
+    is a typing.Literal with tag values that are unique across members. Returns
+    ``(field_name, {tag_value: member})`` or ``None`` when the union has no such
+    unambiguous tag field.
+    """
+    if attr_type in _discriminator_cache:
+        return _discriminator_cache[attr_type]
+
+    from kobject.core import Kobject
+
+    members = [m for m in get_args(attr_type) if isclass(m) and issubclass(m, Kobject)]
+    result: tuple[str, dict[Any, type[Any]]] | None = None
+    if len(members) >= 2:
+        for meta in members[0]._with_field_map():
+            if not is_literal(meta.annotation):
+                continue
+            tag_map: dict[Any, type[Any]] = {}
+            ok = True
+            for member in members:
+                field_meta = next(
+                    (f for f in member._with_field_map() if f.name == meta.name),
+                    None,
+                )
+                if field_meta is None or not is_literal(field_meta.annotation):
+                    ok = False
+                    break
+                for tag in get_args(field_meta.annotation):
+                    if tag in tag_map:  # tag reused across members -> ambiguous
+                        ok = False
+                        break
+                    tag_map[tag] = member
+                if not ok:
+                    break
+            if ok and tag_map:
+                result = (meta.name, tag_map)
+                break
+
+    _discriminator_cache[attr_type] = result
+    return result
 
 
 def _checker(
@@ -65,14 +118,28 @@ class JSONDecoder:
     @classmethod
     def _cast_union(cls, attr_type: type[Any], attr_value: Any) -> Any:
         """
-        Cast a value for a Union type by trying each member in declaration order
-        and returning the first that successfully deserializes. There is no
-        ambiguity detection: if more than one member could match, the first
-        declared one wins.
+        Cast a value for a Union type.
+
+        When the union is a tagged discriminated union (every Kobject member
+        shares a Literal-typed field with unique tag values), the tag in the
+        payload authoritatively selects the member. Otherwise each member is
+        tried in declaration order and the first that successfully deserializes
+        wins; if more than one could match, the first declared one wins.
         """
         # Local imports to avoid circular imports (same pattern as JSONEncoder).
         from kobject.fields import FieldMeta
         from kobject.validation import _validate_field_value
+
+        if isinstance(attr_value, dict):
+            discriminator = _get_union_discriminator(attr_type)
+            if discriminator is not None:
+                field_name, tag_map = discriminator
+                member = tag_map.get(attr_value.get(field_name))
+                if member is not None:
+                    # Tag selects the member authoritatively: commit to it so a
+                    # malformed payload reports an error against the right type
+                    # instead of silently falling through to another member.
+                    return cls.type_caster(member, attr_value)
 
         for member in get_args(attr_type):
             try:

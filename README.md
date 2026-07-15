@@ -404,6 +404,70 @@ print(C.from_dict({"value": {"a": 1}}).value)  # A(a=1)
 print(C.from_dict({"value": {"b": 2}}).value)  # B(b=2)
 ```
 
+##### Tagged (discriminated) unions
+
+When **every** Kobject member of a union shares a field annotated with a
+```typing.Literal``` whose tag values are **unique across the members**, Kobject treats it
+as a *tagged discriminated union*. The tag in the payload selects the member directly,
+instead of trying members in declaration order. This is faster and produces a clear error
+against the selected member when the rest of the payload is malformed. No extra
+configuration is required — the discriminator is detected automatically from the
+```Literal``` fields, and it also works inside collections (```list[Cat | Dog]```, etc.).
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+from kobject import Kobject
+
+
+@dataclass
+class Cat(Kobject):
+    kind: Literal["cat"]
+    lives: int
+
+
+@dataclass
+class Dog(Kobject):
+    kind: Literal["dog"]
+    good: bool
+
+
+@dataclass
+class Owner(Kobject):
+    pet: Cat | Dog
+
+
+print(Owner.from_dict({"pet": {"kind": "dog", "good": True}}).pet)  # Dog(kind='dog', good=True)
+```
+
+If the tag value is unknown, or the members do not all share a unique ```Literal``` tag
+field, Kobject falls back to the first-match-wins behavior described above.
+
+#### Literal types
+
+```typing.Literal``` fields are validated by membership: the value must be equal to one of
+the declared literals, matched by both value and type (so ```Literal[1]``` rejects
+```True``` and ```Literal[True]``` rejects ```1```, per PEP 586). Literals are supported in
+validation, ```from_dict```/```from_json```, and JSON Schema generation (emitted as an
+```enum```).
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+from kobject import Kobject
+
+
+@dataclass
+class Config(Kobject):
+    mode: Literal["r", "w", "rw"]
+
+
+Config(mode="rw")   # OK
+Config(mode="x")    # Raises TypeError
+```
+
 ### JSON Schema
 
 Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.

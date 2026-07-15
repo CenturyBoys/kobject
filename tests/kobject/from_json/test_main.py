@@ -465,3 +465,77 @@ def test_from_json_literal_round_trip():
     restored = LiteralStub.from_json(instance.to_json())
     assert restored.mode == "a"
     assert restored.level == 2
+
+
+@dataclass(frozen=True)
+class TagCat(Kobject):
+    kind: Literal["cat"]
+    lives: int
+
+
+@dataclass(frozen=True)
+class TagDog(Kobject):
+    kind: Literal["dog"]
+    good: bool
+
+
+@dataclass(frozen=True)
+class TagOwner(Kobject):
+    pet: TagCat | TagDog
+
+
+def test_tagged_union_selects_member_by_tag():
+    owner = TagOwner.from_dict({"pet": {"kind": "dog", "good": True}})
+    assert owner.pet == TagDog(kind="dog", good=True)
+
+
+def test_tagged_union_bad_payload_reports_selected_member():
+    with pytest.raises(TypeError) as error:
+        # Valid tag "cat" commits to TagCat; the missing 'lives' must surface.
+        TagOwner.from_dict({"pet": {"kind": "cat"}})
+    assert "lives" in error.value.args[0]
+
+
+def test_tagged_union_unknown_tag_raises():
+    with pytest.raises(TypeError):
+        TagOwner.from_dict({"pet": {"kind": "fish", "good": True}})
+
+
+def test_tagged_union_round_trip():
+    owner = TagOwner.from_dict({"pet": {"kind": "dog", "good": True}})
+    restored = TagOwner.from_json(owner.to_json())
+    assert restored.pet == TagDog(kind="dog", good=True)
+
+
+@dataclass(frozen=True)
+class TagMultiA(Kobject):
+    t: Literal["a1", "a2"]
+    x: int
+
+
+@dataclass(frozen=True)
+class TagMultiB(Kobject):
+    t: Literal["b1"]
+    y: int
+
+
+@dataclass(frozen=True)
+class TagMultiHolder(Kobject):
+    value: TagMultiA | TagMultiB
+
+
+def test_tagged_union_multi_value_literal():
+    holder = TagMultiHolder.from_dict({"value": {"t": "a2", "x": 5}})
+    assert holder.value == TagMultiA(t="a2", x=5)
+
+
+@dataclass(frozen=True)
+class TagZoo(Kobject):
+    animals: list[TagCat | TagDog]
+
+
+def test_tagged_union_in_list():
+    zoo = TagZoo.from_dict(
+        {"animals": [{"kind": "cat", "lives": 9}, {"kind": "dog", "good": True}]}
+    )
+    assert zoo.animals == [TagCat(kind="cat", lives=9), TagDog(kind="dog", good=True)]
