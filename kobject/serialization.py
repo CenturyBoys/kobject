@@ -68,6 +68,18 @@ def _get_union_discriminator(
     return result
 
 
+def _is_generic_kobject(attr_type: type[Any]) -> bool:
+    """Check if attr_type is a parametrized generic Kobject subclass (Box[int])."""
+    from kobject.core import Kobject
+
+    origin = get_origin(attr_type)
+    return (
+        isinstance(origin, type)
+        and issubclass(origin, Kobject)
+        and bool(getattr(origin, "__parameters__", ()))
+    )
+
+
 def _checker(
     attr_type: type | type[Any], reference: type | type[Any] | types.UnionType
 ) -> bool:
@@ -110,10 +122,28 @@ class JSONDecoder:
         """
         if is_union(attr_type):
             return cls._cast_union(attr_type, attr_value)
+        if isinstance(attr_value, dict) and _is_generic_kobject(attr_type):
+            return cls._cast_generic_kobject(attr_type, attr_value)
         for map_attr_type, resolver in cls.types_resolver:
             if _checker(attr_type, map_attr_type):
                 return resolver(attr_type, attr_value)
         return attr_value
+
+    @classmethod
+    def _cast_generic_kobject(cls, attr_type: type[Any], attr_value: Any) -> Any:
+        """
+        Deserialize a parametrized generic Kobject (e.g. ``Box[int]``) by binding
+        its TypeVars to the concrete arguments and delegating to ``from_dict``.
+        """
+        from kobject._compat import substitute_type_vars
+
+        origin: Any = get_origin(attr_type)
+        mapping = dict(zip(origin.__parameters__, get_args(attr_type), strict=False))
+        overrides = {
+            field.name: substitute_type_vars(field.annotation, mapping)
+            for field in origin._with_field_map()
+        }
+        return origin.from_dict(attr_value, _type_overrides=overrides)
 
     @classmethod
     def _cast_union(cls, attr_type: type[Any], attr_value: Any) -> Any:

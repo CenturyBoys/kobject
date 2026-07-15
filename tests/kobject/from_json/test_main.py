@@ -2,7 +2,7 @@ import datetime
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from json import JSONDecodeError
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 from uuid import UUID
 
 import pytest
@@ -539,3 +539,48 @@ def test_tagged_union_in_list():
         {"animals": [{"kind": "cat", "lives": 9}, {"kind": "dog", "good": True}]}
     )
     assert zoo.animals == [TagCat(kind="cat", lives=9), TagDog(kind="dog", good=True)]
+
+
+_GT = TypeVar("_GT")
+
+
+@dataclass(frozen=True)
+class GenBox(Kobject, Generic[_GT]):
+    value: _GT
+
+
+@dataclass(frozen=True)
+class GenIntHolder(Kobject):
+    box: GenBox[int]
+
+
+@dataclass(frozen=True)
+class GenInner(Kobject):
+    n: int
+
+
+@dataclass(frozen=True)
+class GenInnerHolder(Kobject):
+    box: GenBox[GenInner]
+
+
+def test_from_dict_generic_primitive():
+    holder = GenIntHolder.from_dict({"box": {"value": 5}})
+    assert holder.box == GenBox(value=5)
+
+
+def test_from_dict_generic_wrong_inner_type():
+    with pytest.raises(TypeError) as error:
+        GenIntHolder.from_dict({"box": {"value": "x"}})
+    assert "Wrong type for box:" in error.value.args[0]
+
+
+def test_from_dict_generic_nested_kobject():
+    holder = GenInnerHolder.from_dict({"box": {"value": {"n": 3}}})
+    assert holder.box.value == GenInner(n=3)
+
+
+def test_from_json_generic_round_trip():
+    holder = GenIntHolder.from_dict({"box": {"value": 5}})
+    restored = GenIntHolder.from_json(holder.to_json())
+    assert restored == holder

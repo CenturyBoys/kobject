@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum, IntEnum
-from typing import Any, Literal
+from typing import Any, Generic, Literal, TypeVar
 from uuid import UUID
 
 import pytest
@@ -750,3 +750,41 @@ def test_schema_literal_in_list():
         "type": "array",
         "items": {"type": "string", "enum": ["a", "b"]},
     }
+
+
+_ST = TypeVar("_ST")
+
+
+@dataclass
+class SchemaBox(Kobject, Generic[_ST]):
+    value: _ST
+
+
+def test_schema_generic_parametrized_field():
+    @dataclass
+    class Holder(Kobject):
+        box: SchemaBox[int]
+
+    schema = Holder.json_schema()
+    assert schema["properties"]["box"]["type"] == "object"
+    assert schema["properties"]["box"]["properties"]["value"] == {"type": "integer"}
+
+
+def test_schema_generic_different_parametrizations_are_independent():
+    @dataclass
+    class Holder(Kobject):
+        a: SchemaBox[int]
+        b: SchemaBox[str]
+
+    schema = Holder.json_schema()
+    assert schema["properties"]["a"]["properties"]["value"] == {"type": "integer"}
+    assert schema["properties"]["b"]["properties"]["value"] == {"type": "string"}
+
+
+def test_schema_bare_typevar_is_any():
+    @dataclass
+    class Holder(Kobject):
+        value: _ST
+
+    schema = Holder.json_schema()
+    assert schema["properties"]["value"] == {}

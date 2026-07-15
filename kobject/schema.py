@@ -13,7 +13,7 @@ from enum import Enum, IntEnum
 from inspect import isclass
 from typing import TYPE_CHECKING, Any, ClassVar, Union, get_args, get_origin
 
-from kobject._compat import is_literal
+from kobject._compat import is_literal, is_type_var, substitute_type_vars
 
 if TYPE_CHECKING:
     from kobject.core import Kobject
@@ -265,6 +265,10 @@ class JSONSchemaGenerator:
         if attr_type is Any:
             return {}
 
+        # Handle bare TypeVar (unbound generic parameter) as Any
+        if is_type_var(attr_type):
+            return {}
+
         # Handle Literal
         if is_literal(attr_type):
             values = list(get_args(attr_type))
@@ -301,6 +305,19 @@ class JSONSchemaGenerator:
         # Handle generic types
         origin = get_origin(attr_type)
         args = get_args(attr_type)
+
+        # Handle parametrized generic Kobject (e.g. Box[int]) with an inline
+        # object schema whose TypeVars are substituted by the concrete args.
+        generic_origin: Any = origin
+        params = getattr(generic_origin, "__parameters__", ())
+        if (
+            params
+            and isclass(generic_origin)
+            and issubclass(generic_origin, Kobject)
+            and generic_origin is not Kobject
+        ):
+            mapping = dict(zip(params, args, strict=False))
+            return cls._generate_object_schema(generic_origin, defs, processed, mapping)
 
         # Handle Union types
         if _is_union(attr_type):
@@ -362,6 +379,7 @@ class JSONSchemaGenerator:
         klass: type[Kobject],
         defs: dict[str, dict[str, Any]],
         processed: set[type],
+        type_mapping: dict[Any, Any] | None = None,
     ) -> tuple[dict[str, Any], list[str]]:
         """
         Build properties dict and required list for a Kobject class.
@@ -370,6 +388,8 @@ class JSONSchemaGenerator:
             klass: The Kobject class to process
             defs: Dictionary to accumulate $defs for nested Kobjects
             processed: Set of types already processed (cycle detection)
+            type_mapping: Optional TypeVar -> concrete type map, applied to each
+                field annotation for parametrized generic models (e.g. Box[int])
 
         Returns:
             Tuple of (properties dict, required fields list)
@@ -381,7 +401,12 @@ class JSONSchemaGenerator:
         required: list[str] = []
 
         for fld in fields:
-            prop_schema = cls.get_schema_for_type(fld.annotation, defs, processed)
+            annotation = (
+                substitute_type_vars(fld.annotation, type_mapping)
+                if type_mapping
+                else fld.annotation
+            )
+            prop_schema = cls.get_schema_for_type(annotation, defs, processed)
 
             # Add field description from docstring
             if fld.name in docstring_meta.field_descriptions:
@@ -407,6 +432,7 @@ class JSONSchemaGenerator:
         klass: type,
         defs: dict[str, dict[str, Any]],
         processed: set[type],
+        type_mapping: dict[Any, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate the object schema for a Kobject class (without $defs)."""
         from kobject.core import Kobject
@@ -415,7 +441,7 @@ class JSONSchemaGenerator:
             return {}
 
         properties, required = cls._build_properties_and_required(
-            klass, defs, processed
+            klass, defs, processed, type_mapping
         )
         docstring_meta = parse_docstring(klass.__doc__)
 

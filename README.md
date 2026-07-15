@@ -468,6 +468,42 @@ Config(mode="rw")   # OK
 Config(mode="x")    # Raises TypeError
 ```
 
+#### Generic models (TypeVar)
+
+A Kobject can be generic (```class Box(Kobject, Generic[T])```). When a **parametrized**
+generic is used as a field (```Box[int]```), Kobject binds the type variable to the
+concrete argument and validates, deserializes, and generates schema accordingly — including
+```TypeVar```s nested inside collections (```list[T]```, ```dict[str, T]```, ...).
+
+```python
+from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+from kobject import Kobject
+
+T = TypeVar("T")
+
+
+@dataclass
+class Box(Kobject, Generic[T]):
+    value: T
+
+
+@dataclass
+class Response(Kobject):
+    data: Box[int]
+
+
+Response.from_dict({"data": {"value": 5}})    # OK -> Response(data=Box(value=5))
+Response(data=Box(value="x"))                 # Raises TypeError (value must be int)
+```
+
+> **Note:** the binding is only enforced when the parametrized generic is used as a field
+> (or through ```from_dict```/```from_json```/```json_schema``` of the enclosing model).
+> A bare, unbound ```TypeVar``` — e.g. constructing ```Box(value=...)``` directly — is
+> treated as ```Any```, because Python does not make the ```Box[int]``` binding available
+> during ```__init__```.
+
 ### JSON Schema
 
 Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
