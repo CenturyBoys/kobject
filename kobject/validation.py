@@ -2,10 +2,54 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, get_args, get_origin
 
-from kobject._compat import is_generic_alias, is_special_form_union
+from kobject._compat import (
+    is_generic_alias,
+    is_literal,
+    is_special_form_union,
+    is_type_var,
+    substitute_type_vars,
+)
 from kobject.fields import FieldMeta
+
+
+def _is_kobject_generic(annotation: Any) -> bool:
+    """Check if annotation is a parametrized generic Kobject subclass (Box[int])."""
+    from kobject.core import Kobject
+
+    origin = get_origin(annotation)
+    return (
+        isinstance(origin, type)
+        and issubclass(origin, Kobject)
+        and bool(getattr(origin, "__parameters__", ()))
+    )
+
+
+def _validate_generic_kobject(field: FieldMeta, value: Any) -> bool:
+    """Validate a parametrized generic Kobject field by substituting its TypeVars."""
+    origin: Any = get_origin(field.annotation)
+    mapping = dict(zip(origin.__parameters__, get_args(field.annotation), strict=False))
+    for sub_field in origin._with_field_map():
+        sub_annotation = substitute_type_vars(sub_field.annotation, mapping)
+        if (
+            _validate_field_value(
+                getattr(value, sub_field.name),
+                FieldMeta.get_generic_field_meta(sub_annotation),
+            )
+            is False
+        ):
+            return False
+    return True
+
+
+def _validate_literal(value: Any, args: tuple[Any, ...]) -> bool:
+    """Validate a Literal type field.
+
+    Match on equality *and* type identity so the True == 1 / False == 0
+    pitfall does not let a bool satisfy Literal[1] (or vice versa). PEP 586.
+    """
+    return any(type(value) is type(arg) and value == arg for arg in args)
 
 
 def _validate_special_form(field: FieldMeta, value: Any) -> bool:
@@ -97,7 +141,12 @@ def _validate_set(field: FieldMeta, value: Any) -> bool:
 
 def _validate_field_value(value: Any, field: FieldMeta) -> bool:
     """Validate a field value against its type annotation."""
-    if value == field.default or field.annotation in (Ellipsis, Any):
+    if is_type_var(field.annotation):
+        # Unbound TypeVar (e.g. a generic model used without a binding): accept
+        # anything, matching how Any is treated.
+        _is_valid = True
+
+    elif value == field.default or field.annotation in (Ellipsis, Any):
         _is_valid = True
 
     elif is_generic_alias(field.annotation) is False:
@@ -106,11 +155,17 @@ def _validate_field_value(value: Any, field: FieldMeta) -> bool:
     elif is_special_form_union(field.annotation):
         _is_valid = _validate_special_form(field, value)
 
+    elif is_literal(field.annotation):
+        _is_valid = _validate_literal(value, get_args(field.annotation))
+
     elif not isinstance(
         value,
         field.annotation.__origin__,
     ):
         _is_valid = False
+
+    elif _is_kobject_generic(field.annotation):
+        _is_valid = _validate_generic_kobject(field, value)
 
     elif issubclass(field.annotation.__origin__, dict):
         _is_valid = _validate_dict(field, value)

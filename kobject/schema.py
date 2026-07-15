@@ -13,11 +13,17 @@ from enum import Enum, IntEnum
 from inspect import isclass
 from typing import TYPE_CHECKING, Any, ClassVar, Union, get_args, get_origin
 
+from kobject._compat import is_literal, is_type_var, substitute_type_vars
+
 if TYPE_CHECKING:
     from kobject.core import Kobject
 
 # Type alias for schema resolver callback
 SchemaResolverCallback = Callable[[type[Any]], dict[str, Any]]
+
+# JSON Schema dialect emitted by generate(). The output already uses 2020-12
+# constructs (prefixItems, $defs), so this is the accurate dialect.
+JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 
 @dataclass(slots=True, frozen=True)
@@ -181,7 +187,7 @@ def _is_optional(attr_type: type[Any]) -> tuple[bool, type[Any] | None]:
 
 class JSONSchemaGenerator:
     """
-    Generates JSON Schema Draft 7 from Kobject classes.
+    Generates JSON Schema (Draft 2020-12) from Kobject classes.
 
     Supports custom type resolvers via register_resolver().
     """
@@ -209,6 +215,7 @@ class JSONSchemaGenerator:
         attr_type: type[Any],
         defs: dict[str, dict[str, Any]],
         processed: set[type],
+        mode: str = "validation",
     ) -> dict[str, Any]:
         """
         Get JSON Schema for a Python type.
@@ -217,6 +224,7 @@ class JSONSchemaGenerator:
             attr_type: The Python type to convert
             defs: Dictionary to accumulate $defs for nested Kobjects
             processed: Set of types already processed (cycle detection)
+            mode: "validation" or "serialization"; forwarded to nested objects
 
         Returns:
             JSON Schema dict for the type
@@ -263,6 +271,21 @@ class JSONSchemaGenerator:
         if attr_type is Any:
             return {}
 
+        # Handle bare TypeVar (unbound generic parameter) as Any
+        if is_type_var(attr_type):
+            return {}
+
+        # Handle Literal
+        if is_literal(attr_type):
+            values = list(get_args(attr_type))
+            if all(isinstance(v, bool) for v in values):
+                return {"type": "boolean", "enum": values}
+            if all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+                return {"type": "integer", "enum": values}
+            if all(isinstance(v, str) for v in values):
+                return {"type": "string", "enum": values}
+            return {"enum": values}
+
         # Handle Enum
         if isclass(attr_type) and issubclass(attr_type, Enum):
             values = [e.value for e in attr_type]
@@ -281,7 +304,9 @@ class JSONSchemaGenerator:
             class_name = attr_type.__name__
             if attr_type not in processed:
                 processed.add(attr_type)
-                nested_schema = cls._generate_object_schema(attr_type, defs, processed)
+                nested_schema = cls._generate_object_schema(
+                    attr_type, defs, processed, mode=mode
+                )
                 defs[class_name] = nested_schema
             return {"$ref": f"#/$defs/{class_name}"}
 
@@ -289,21 +314,38 @@ class JSONSchemaGenerator:
         origin = get_origin(attr_type)
         args = get_args(attr_type)
 
+        # Handle parametrized generic Kobject (e.g. Box[int]) with an inline
+        # object schema whose TypeVars are substituted by the concrete args.
+        generic_origin: Any = origin
+        params = getattr(generic_origin, "__parameters__", ())
+        if (
+            params
+            and isclass(generic_origin)
+            and issubclass(generic_origin, Kobject)
+            and generic_origin is not Kobject
+        ):
+            mapping = dict(zip(params, args, strict=False))
+            return cls._generate_object_schema(
+                generic_origin, defs, processed, mapping, mode=mode
+            )
+
         # Handle Union types
         if _is_union(attr_type):
             is_opt, inner_type = _is_optional(attr_type)
             if is_opt and inner_type is not None:
                 # Simple Optional[T] -> anyOf with null
-                inner_schema = cls.get_schema_for_type(inner_type, defs, processed)
+                inner_schema = cls.get_schema_for_type(
+                    inner_type, defs, processed, mode
+                )
                 return {"anyOf": [inner_schema, {"type": "null"}]}
             # Complex union
-            schemas = [cls.get_schema_for_type(t, defs, processed) for t in args]
+            schemas = [cls.get_schema_for_type(t, defs, processed, mode) for t in args]
             return {"anyOf": schemas}
 
         # Handle list
         if origin is list:
             if args:
-                items_schema = cls.get_schema_for_type(args[0], defs, processed)
+                items_schema = cls.get_schema_for_type(args[0], defs, processed, mode)
                 return {"type": "array", "items": items_schema}
             return {"type": "array"}
 
@@ -312,11 +354,13 @@ class JSONSchemaGenerator:
             if args:
                 # Check for variable-length tuple (T, ...)
                 if len(args) == 2 and args[1] is ...:
-                    items_schema = cls.get_schema_for_type(args[0], defs, processed)
+                    items_schema = cls.get_schema_for_type(
+                        args[0], defs, processed, mode
+                    )
                     return {"type": "array", "items": items_schema}
                 # Fixed-length tuple
                 prefix_items = [
-                    cls.get_schema_for_type(t, defs, processed) for t in args
+                    cls.get_schema_for_type(t, defs, processed, mode) for t in args
                 ]
                 return {
                     "type": "array",
@@ -329,14 +373,14 @@ class JSONSchemaGenerator:
         # Handle dict
         if origin is dict:
             if args and len(args) >= 2:
-                value_schema = cls.get_schema_for_type(args[1], defs, processed)
+                value_schema = cls.get_schema_for_type(args[1], defs, processed, mode)
                 return {"type": "object", "additionalProperties": value_schema}
             return {"type": "object"}
 
         # Handle set
         if origin is set:
             if args:
-                items_schema = cls.get_schema_for_type(args[0], defs, processed)
+                items_schema = cls.get_schema_for_type(args[0], defs, processed, mode)
                 return {"type": "array", "items": items_schema, "uniqueItems": True}
             return {"type": "array", "uniqueItems": True}
 
@@ -349,6 +393,8 @@ class JSONSchemaGenerator:
         klass: type[Kobject],
         defs: dict[str, dict[str, Any]],
         processed: set[type],
+        type_mapping: dict[Any, Any] | None = None,
+        mode: str = "validation",
     ) -> tuple[dict[str, Any], list[str]]:
         """
         Build properties dict and required list for a Kobject class.
@@ -357,6 +403,11 @@ class JSONSchemaGenerator:
             klass: The Kobject class to process
             defs: Dictionary to accumulate $defs for nested Kobjects
             processed: Set of types already processed (cycle detection)
+            type_mapping: Optional TypeVar -> concrete type map, applied to each
+                field annotation for parametrized generic models (e.g. Box[int])
+            mode: "validation" describes accepted input (defaulted fields are
+                optional); "serialization" describes emitted output, where every
+                field is always present and therefore required.
 
         Returns:
             Tuple of (properties dict, required fields list)
@@ -368,7 +419,12 @@ class JSONSchemaGenerator:
         required: list[str] = []
 
         for fld in fields:
-            prop_schema = cls.get_schema_for_type(fld.annotation, defs, processed)
+            annotation = (
+                substitute_type_vars(fld.annotation, type_mapping)
+                if type_mapping
+                else fld.annotation
+            )
+            prop_schema = cls.get_schema_for_type(annotation, defs, processed, mode)
 
             # Add field description from docstring
             if fld.name in docstring_meta.field_descriptions:
@@ -386,6 +442,11 @@ class JSONSchemaGenerator:
 
             properties[fld.name] = prop_schema
 
+        # In serialization mode every field is always emitted by to_dict(), so
+        # all fields are required regardless of having a default.
+        if mode == "serialization":
+            required = [fld.name for fld in fields]
+
         return properties, required
 
     @classmethod
@@ -394,6 +455,8 @@ class JSONSchemaGenerator:
         klass: type,
         defs: dict[str, dict[str, Any]],
         processed: set[type],
+        type_mapping: dict[Any, Any] | None = None,
+        mode: str = "validation",
     ) -> dict[str, Any]:
         """Generate the object schema for a Kobject class (without $defs)."""
         from kobject.core import Kobject
@@ -402,7 +465,7 @@ class JSONSchemaGenerator:
             return {}
 
         properties, required = cls._build_properties_and_required(
-            klass, defs, processed
+            klass, defs, processed, type_mapping, mode
         )
         docstring_meta = parse_docstring(klass.__doc__)
 
@@ -430,12 +493,15 @@ class JSONSchemaGenerator:
         return schema
 
     @classmethod
-    def generate(cls, klass: type) -> dict[str, Any]:
+    def generate(cls, klass: type, mode: str = "validation") -> dict[str, Any]:
         """
-        Generate JSON Schema Draft 7 for a Kobject class.
+        Generate a JSON Schema (Draft 2020-12) for a Kobject class.
 
         Args:
             klass: The Kobject class to generate schema for
+            mode: "validation" (default) describes what from_dict/from_json
+                accepts — defaulted fields are optional. "serialization"
+                describes what to_dict/to_json emits — every field is required.
 
         Returns:
             Complete JSON Schema dict with $schema, title, etc.
@@ -445,16 +511,21 @@ class JSONSchemaGenerator:
         if not issubclass(klass, Kobject):
             raise TypeError(f"{klass.__name__} is not a Kobject subclass")
 
+        if mode not in ("validation", "serialization"):
+            raise ValueError(
+                f"mode must be 'validation' or 'serialization', got {mode!r}"
+            )
+
         defs: dict[str, dict[str, Any]] = {}
         processed: set[type] = {klass}
 
         properties, required = cls._build_properties_and_required(
-            klass, defs, processed
+            klass, defs, processed, mode=mode
         )
         docstring_meta = parse_docstring(klass.__doc__)
 
         schema: dict[str, Any] = {
-            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$schema": JSON_SCHEMA_DIALECT,
             "type": "object",
             "properties": properties,
             "additionalProperties": False,

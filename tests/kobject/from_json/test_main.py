@@ -2,6 +2,7 @@ import datetime
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from json import JSONDecodeError
+from typing import Generic, Literal, TypeVar
 from uuid import UUID
 
 import pytest
@@ -76,9 +77,9 @@ class BaseG(Kobject):
 def test_from_json_error_default_exception():
     with pytest.raises(JSONDecodeError) as error:
         BaseC.from_json(payload=b"{")
-    assert error.value.args == (
-        "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
-    )
+    # Message wording differs between the stdlib and orjson backends, but both
+    # are json.JSONDecodeError and point at the same location.
+    assert "line 1 column 2 (char 1)" in error.value.args[0]
 
 
 def test_from_json_error_custom_exception():
@@ -316,3 +317,320 @@ def test_from_json_tuple_and_dict_cast():
     assert obj.a_dict == {
         "m": BaseB(a_uuid=UUID("1d9cf695-c917-49ce-854b-4063f0cda2e7"))
     }
+
+
+# --- Union member discrimination during deserialization ---------------------
+
+
+@dataclass(frozen=True)
+class UnionA(Kobject):
+    a: str | int
+
+
+@dataclass(frozen=True)
+class UnionB(Kobject):
+    b: str | int
+
+
+@dataclass(frozen=True)
+class UnionOfKobjects(Kobject):
+    value: UnionA | UnionB
+
+
+class UnionOfKobjectsDefault(Kobject):
+    value: UnionA | UnionB
+
+    def __init__(self, value: UnionA | UnionB):
+        self.value = value
+        self.__post_init__()
+
+
+@pytest.fixture(params=[UnionOfKobjects, UnionOfKobjectsDefault])
+def union_of_kobjects_cls(request):
+    return request.param
+
+
+def test_from_dict_union_resolves_first_member(union_of_kobjects_cls):
+    instance = union_of_kobjects_cls.from_dict({"value": {"a": 1}})
+    assert instance.value == UnionA(a=1)
+
+
+def test_from_dict_union_resolves_second_member(union_of_kobjects_cls):
+    """Payload matching the second union member must resolve to it, not break."""
+    instance = union_of_kobjects_cls.from_dict({"value": {"b": 2}})
+    assert instance.value == UnionB(b=2)
+
+
+def test_from_dict_union_no_member_matches_raises_type_error(union_of_kobjects_cls):
+    with pytest.raises(TypeError) as error:
+        union_of_kobjects_cls.from_dict({"value": {"z": 9}})
+    error_msg = error.value.args[0]
+    assert "type error:" in error_msg
+    assert "Wrong type for value:" in error_msg
+
+
+@dataclass(frozen=True)
+class UnionWithNone(Kobject):
+    value: UnionA | None
+
+
+def test_from_dict_union_with_none():
+    assert UnionWithNone.from_dict({"value": None}).value is None
+    assert UnionWithNone.from_dict({"value": {"a": 1}}).value == UnionA(a=1)
+
+
+@dataclass(frozen=True)
+class UnionKobjectFirst(Kobject):
+    value: UnionA | int
+
+
+@dataclass(frozen=True)
+class UnionKobjectLast(Kobject):
+    value: int | UnionA
+
+
+def test_from_dict_union_with_primitive_both_orders():
+    assert UnionKobjectFirst.from_dict({"value": {"a": 1}}).value == UnionA(a=1)
+    assert UnionKobjectFirst.from_dict({"value": 5}).value == 5
+    assert UnionKobjectLast.from_dict({"value": {"a": 1}}).value == UnionA(a=1)
+    assert UnionKobjectLast.from_dict({"value": 5}).value == 5
+
+
+@dataclass(frozen=True)
+class UnionInList(Kobject):
+    values: list[UnionA | UnionB]
+
+
+def test_from_dict_union_in_list():
+    instance = UnionInList.from_dict({"values": [{"a": 1}, {"b": 2}]})
+    assert instance.values == [UnionA(a=1), UnionB(b=2)]
+
+
+@dataclass(frozen=True)
+class UnionInSet(Kobject):
+    values: set[UnionA | UnionB]
+
+
+def test_from_dict_union_in_set():
+    instance = UnionInSet.from_dict({"values": [{"b": 2}]})
+    assert instance.values == {UnionB(b=2)}
+
+
+@dataclass(frozen=True)
+class UnionInTuple(Kobject):
+    values: tuple[UnionA | UnionB, UnionA | UnionB]
+
+
+def test_from_dict_union_in_tuple():
+    instance = UnionInTuple.from_dict({"values": [{"b": 1}, {"a": 2}]})
+    assert instance.values == (UnionB(b=1), UnionA(a=2))
+
+
+@dataclass(frozen=True)
+class UnionInDict(Kobject):
+    values: dict[str, UnionA | UnionB]
+
+
+def test_from_dict_union_in_dict():
+    instance = UnionInDict.from_dict({"values": {"x": {"b": 2}, "y": {"a": 3}}})
+    assert instance.values == {"x": UnionB(b=2), "y": UnionA(a=3)}
+
+
+def test_from_json_union_round_trip():
+    instance = UnionInDict.from_dict({"values": {"x": {"b": 2}}})
+    restored = UnionInDict.from_json(instance.to_json())
+    assert restored.values == {"x": UnionB(b=2)}
+
+
+@dataclass
+class LiteralStub(Kobject):
+    mode: Literal["a", "b"]
+    level: Literal[1, 2] = 1
+
+
+def test_from_dict_literal_valid():
+    instance = LiteralStub.from_dict({"mode": "b", "level": 2})
+    assert instance.mode == "b"
+    assert instance.level == 2
+
+
+def test_from_dict_literal_out_of_set():
+    with pytest.raises(TypeError) as error:
+        LiteralStub.from_dict({"mode": "x"})
+    assert "Wrong type for mode:" in error.value.args[0]
+
+
+def test_from_json_literal_round_trip():
+    instance = LiteralStub.from_dict({"mode": "a", "level": 2})
+    restored = LiteralStub.from_json(instance.to_json())
+    assert restored.mode == "a"
+    assert restored.level == 2
+
+
+@dataclass(frozen=True)
+class TagCat(Kobject):
+    kind: Literal["cat"]
+    lives: int
+
+
+@dataclass(frozen=True)
+class TagDog(Kobject):
+    kind: Literal["dog"]
+    good: bool
+
+
+@dataclass(frozen=True)
+class TagOwner(Kobject):
+    pet: TagCat | TagDog
+
+
+def test_tagged_union_selects_member_by_tag():
+    owner = TagOwner.from_dict({"pet": {"kind": "dog", "good": True}})
+    assert owner.pet == TagDog(kind="dog", good=True)
+
+
+def test_tagged_union_bad_payload_reports_selected_member():
+    with pytest.raises(TypeError) as error:
+        # Valid tag "cat" commits to TagCat; the missing 'lives' must surface.
+        TagOwner.from_dict({"pet": {"kind": "cat"}})
+    assert "lives" in error.value.args[0]
+
+
+def test_tagged_union_unknown_tag_raises():
+    with pytest.raises(TypeError):
+        TagOwner.from_dict({"pet": {"kind": "fish", "good": True}})
+
+
+def test_tagged_union_round_trip():
+    owner = TagOwner.from_dict({"pet": {"kind": "dog", "good": True}})
+    restored = TagOwner.from_json(owner.to_json())
+    assert restored.pet == TagDog(kind="dog", good=True)
+
+
+@dataclass(frozen=True)
+class TagMultiA(Kobject):
+    t: Literal["a1", "a2"]
+    x: int
+
+
+@dataclass(frozen=True)
+class TagMultiB(Kobject):
+    t: Literal["b1"]
+    y: int
+
+
+@dataclass(frozen=True)
+class TagMultiHolder(Kobject):
+    value: TagMultiA | TagMultiB
+
+
+def test_tagged_union_multi_value_literal():
+    holder = TagMultiHolder.from_dict({"value": {"t": "a2", "x": 5}})
+    assert holder.value == TagMultiA(t="a2", x=5)
+
+
+@dataclass(frozen=True)
+class TagZoo(Kobject):
+    animals: list[TagCat | TagDog]
+
+
+def test_tagged_union_in_list():
+    zoo = TagZoo.from_dict(
+        {"animals": [{"kind": "cat", "lives": 9}, {"kind": "dog", "good": True}]}
+    )
+    assert zoo.animals == [TagCat(kind="cat", lives=9), TagDog(kind="dog", good=True)]
+
+
+_GT = TypeVar("_GT")
+
+
+@dataclass(frozen=True)
+class GenBox(Kobject, Generic[_GT]):
+    value: _GT
+
+
+@dataclass(frozen=True)
+class GenIntHolder(Kobject):
+    box: GenBox[int]
+
+
+@dataclass(frozen=True)
+class GenInner(Kobject):
+    n: int
+
+
+@dataclass(frozen=True)
+class GenInnerHolder(Kobject):
+    box: GenBox[GenInner]
+
+
+def test_from_dict_generic_primitive():
+    holder = GenIntHolder.from_dict({"box": {"value": 5}})
+    assert holder.box == GenBox(value=5)
+
+
+def test_from_dict_generic_wrong_inner_type():
+    with pytest.raises(TypeError) as error:
+        GenIntHolder.from_dict({"box": {"value": "x"}})
+    assert "Wrong type for box:" in error.value.args[0]
+
+
+def test_from_dict_generic_nested_kobject():
+    holder = GenInnerHolder.from_dict({"box": {"value": {"n": 3}}})
+    assert holder.box.value == GenInner(n=3)
+
+
+def test_from_json_generic_round_trip():
+    holder = GenIntHolder.from_dict({"box": {"value": 5}})
+    restored = GenIntHolder.from_json(holder.to_json())
+    assert restored == holder
+
+
+@dataclass(frozen=True)
+class NonUniformTagA(Kobject):
+    kind: Literal["a"]
+    x: int
+
+
+@dataclass(frozen=True)
+class NonUniformTagB(Kobject):
+    kind: str  # same field name but NOT a Literal -> not a discriminator
+    y: int
+
+
+@dataclass(frozen=True)
+class NonUniformHolder(Kobject):
+    v: NonUniformTagA | NonUniformTagB
+
+
+def test_tagged_union_non_uniform_members_fall_back_to_first_match():
+    # Not all members share a Literal tag field, so there is no discriminator;
+    # resolution falls back to declaration order.
+    holder = NonUniformHolder.from_dict({"v": {"kind": "a", "x": 1}})
+    assert holder.v == NonUniformTagA(kind="a", x=1)
+    holder = NonUniformHolder.from_dict({"v": {"kind": "other", "y": 2}})
+    assert holder.v == NonUniformTagB(kind="other", y=2)
+
+
+@dataclass(frozen=True)
+class DupTagA(Kobject):
+    kind: Literal["same"]
+    a: int
+
+
+@dataclass(frozen=True)
+class DupTagB(Kobject):
+    kind: Literal["same"]
+    b: int
+
+
+@dataclass(frozen=True)
+class DupTagHolder(Kobject):
+    v: DupTagA | DupTagB
+
+
+def test_tagged_union_duplicate_tag_is_ambiguous_falls_back():
+    # The tag value "same" is reused across members -> ambiguous -> no
+    # discriminator, so declaration order wins.
+    holder = DupTagHolder.from_dict({"v": {"kind": "same", "a": 1}})
+    assert holder.v == DupTagA(kind="same", a=1)

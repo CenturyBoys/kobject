@@ -7,10 +7,17 @@ repos:
     - id: ruff-format
 - repo: local
   hooks:
-    - id: pytest
-      name: pytest
-      entry: poetry run pytest
+    - id: mypy
+      name: mypy
+      entry: uv run mypy kobject/
       language: system
       types: [ python ]
       pass_filenames: false
-      always_run: true
+      always_run: false
+    - id: pytest
+      name: pytest
+      entry: uv run pytest
+      language: system
+      types: [ python ]
+      pass_filenames: false
+      always_run: false

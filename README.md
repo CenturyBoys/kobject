@@ -19,6 +19,20 @@ Know your object is a __init__ type validator for class and dataclass
 [![Python](https://img.shields.io/pypi/pyversions/kobject.svg)](https://pypi.org/project/kobject/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
+## Installation
+
+```bash
+pip install kobject
+```
+
+Kobject has no required dependencies. For faster JSON encoding/decoding you can
+install the optional ```orjson``` extra — when present it is used automatically by
+```to_json()```/```from_json()```; otherwise the standard library ```json``` is used.
+
+```bash
+pip install "kobject[orjson]"
+```
+
 ## Usage
 
 Kobject can be use inside default class declaration and with dataclasses. Kobject uses the ```__init__``` signature to check types.
@@ -369,9 +383,144 @@ print(instance)
 BaseC(a_base_a=BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426)), a_base_b=BaseB(a_uuid=UUID('1d9cf695-c917-49ce-854b-4063f0cda2e7')), a_list_of_base_a=[BaseA(a_datetime=datetime.datetime(2023, 2, 1, 17, 38, 45, 389426))])
 ```
 
+#### Union types
+
+When a field is a union (e.g. ```A | B```, ```A | None```, ```A | int```), Kobject tries
+each member **in the order it is declared** and uses the **first one that deserializes
+successfully**. This also applies to unions used inside collections
+(```list[A | B]```, ```set[A | B]```, ```tuple[A | B, ...]```, ```dict[str, A | B]```).
+
+There is **no ambiguity detection**: if a payload could match more than one member, the
+first declared member wins.
+
+```python
+from dataclasses import dataclass
+
+from kobject import Kobject
+
+
+@dataclass
+class A(Kobject):
+    a: int
+
+
+@dataclass
+class B(Kobject):
+    b: int
+
+
+@dataclass
+class C(Kobject):
+    value: A | B
+
+
+print(C.from_dict({"value": {"a": 1}}).value)  # A(a=1)
+print(C.from_dict({"value": {"b": 2}}).value)  # B(b=2)
+```
+
+##### Tagged (discriminated) unions
+
+When **every** Kobject member of a union shares a field annotated with a
+```typing.Literal``` whose tag values are **unique across the members**, Kobject treats it
+as a *tagged discriminated union*. The tag in the payload selects the member directly,
+instead of trying members in declaration order. This is faster and produces a clear error
+against the selected member when the rest of the payload is malformed. No extra
+configuration is required — the discriminator is detected automatically from the
+```Literal``` fields, and it also works inside collections (```list[Cat | Dog]```, etc.).
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+from kobject import Kobject
+
+
+@dataclass
+class Cat(Kobject):
+    kind: Literal["cat"]
+    lives: int
+
+
+@dataclass
+class Dog(Kobject):
+    kind: Literal["dog"]
+    good: bool
+
+
+@dataclass
+class Owner(Kobject):
+    pet: Cat | Dog
+
+
+print(Owner.from_dict({"pet": {"kind": "dog", "good": True}}).pet)  # Dog(kind='dog', good=True)
+```
+
+If the tag value is unknown, or the members do not all share a unique ```Literal``` tag
+field, Kobject falls back to the first-match-wins behavior described above.
+
+#### Literal types
+
+```typing.Literal``` fields are validated by membership: the value must be equal to one of
+the declared literals, matched by both value and type (so ```Literal[1]``` rejects
+```True``` and ```Literal[True]``` rejects ```1```, per PEP 586). Literals are supported in
+validation, ```from_dict```/```from_json```, and JSON Schema generation (emitted as an
+```enum```).
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+from kobject import Kobject
+
+
+@dataclass
+class Config(Kobject):
+    mode: Literal["r", "w", "rw"]
+
+
+Config(mode="rw")   # OK
+Config(mode="x")    # Raises TypeError
+```
+
+#### Generic models (TypeVar)
+
+A Kobject can be generic (```class Box(Kobject, Generic[T])```). When a **parametrized**
+generic is used as a field (```Box[int]```), Kobject binds the type variable to the
+concrete argument and validates, deserializes, and generates schema accordingly — including
+```TypeVar```s nested inside collections (```list[T]```, ```dict[str, T]```, ...).
+
+```python
+from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+from kobject import Kobject
+
+T = TypeVar("T")
+
+
+@dataclass
+class Box(Kobject, Generic[T]):
+    value: T
+
+
+@dataclass
+class Response(Kobject):
+    data: Box[int]
+
+
+Response.from_dict({"data": {"value": 5}})    # OK -> Response(data=Box(value=5))
+Response(data=Box(value="x"))                 # Raises TypeError (value must be int)
+```
+
+> **Note:** the binding is only enforced when the parametrized generic is used as a field
+> (or through ```from_dict```/```from_json```/```json_schema``` of the enclosing model).
+> A bare, unbound ```TypeVar``` — e.g. constructing ```Box(value=...)``` directly — is
+> treated as ```Any```, because Python does not make the ```Box[int]``` binding available
+> during ```__init__```.
+
 ### JSON Schema
 
-Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
+Kobject can generate JSON Schema (Draft 2020-12) from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
 
 ```python
 from dataclasses import dataclass
@@ -397,7 +546,7 @@ print(json.dumps(schema, indent=2))
 ```
 ```json
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
     "name": {
@@ -419,6 +568,20 @@ print(json.dumps(schema, indent=2))
   "required": ["name", "age"],
   "examples": [{"name": "Alice", "age": 30}]
 }
+```
+
+#### Validation vs serialization schema
+
+```json_schema()``` accepts a ```mode```:
+
+- ```mode="validation"``` (default) describes what ```from_dict()```/```from_json()```
+  **accept**: fields with defaults are optional (not listed in ```required```).
+- ```mode="serialization"``` describes what ```to_dict()```/```to_json()``` **emit**:
+  every field is always present, so all fields are ```required```.
+
+```python
+User.json_schema()                      # validation: required == ["name", "age"]
+User.json_schema(mode="serialization")  # serialization: required == ["name", "age", "email"]
 ```
 
 #### Docstring Metadata
@@ -520,3 +683,8 @@ class Invoice(Kobject):
 schema = Invoice.json_schema()
 # schema["properties"]["total"] contains the custom Money schema
 ```
+## Roadmap & design decisions
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what has recently shipped, what is deferred
+(e.g. field aliases, OpenAPI 3.1 output), and what is rejected by design (custom field
+validators and declarative value constraints) along with the rationale.

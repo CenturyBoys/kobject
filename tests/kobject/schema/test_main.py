@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum, IntEnum
-from typing import Any
+from typing import Any, Generic, Literal, TypeVar
 from uuid import UUID
 
 import pytest
@@ -154,7 +154,7 @@ def basic_types_class(request):
 def test_basic_types_schema(basic_types_class):
     schema = basic_types_class.json_schema()
 
-    assert schema["$schema"] == "http://json-schema.org/draft-07/schema#"
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["type"] == "object"
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"a_str", "a_int", "a_float", "a_bool"}
@@ -710,3 +710,166 @@ def test_concurrent_resolver_registration():
 
     assert len(errors) == 0
     assert len(registered) == 10
+
+
+def test_schema_literal_str():
+    @dataclass
+    class StubClass(Kobject):
+        mode: Literal["a", "b"]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["mode"] == {"type": "string", "enum": ["a", "b"]}
+    assert schema["required"] == ["mode"]
+
+
+def test_schema_literal_int():
+    @dataclass
+    class StubClass(Kobject):
+        level: Literal[1, 2]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["level"] == {"type": "integer", "enum": [1, 2]}
+
+
+def test_schema_literal_bool():
+    @dataclass
+    class StubClass(Kobject):
+        flag: Literal[True, False]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["flag"] == {"type": "boolean", "enum": [True, False]}
+
+
+def test_schema_literal_in_list():
+    @dataclass
+    class StubClass(Kobject):
+        modes: list[Literal["a", "b"]]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["modes"] == {
+        "type": "array",
+        "items": {"type": "string", "enum": ["a", "b"]},
+    }
+
+
+_ST = TypeVar("_ST")
+
+
+@dataclass
+class SchemaBox(Kobject, Generic[_ST]):
+    value: _ST
+
+
+def test_schema_generic_parametrized_field():
+    @dataclass
+    class Holder(Kobject):
+        box: SchemaBox[int]
+
+    schema = Holder.json_schema()
+    assert schema["properties"]["box"]["type"] == "object"
+    assert schema["properties"]["box"]["properties"]["value"] == {"type": "integer"}
+
+
+def test_schema_generic_different_parametrizations_are_independent():
+    @dataclass
+    class Holder(Kobject):
+        a: SchemaBox[int]
+        b: SchemaBox[str]
+
+    schema = Holder.json_schema()
+    assert schema["properties"]["a"]["properties"]["value"] == {"type": "integer"}
+    assert schema["properties"]["b"]["properties"]["value"] == {"type": "string"}
+
+
+def test_schema_bare_typevar_is_any():
+    @dataclass
+    class Holder(Kobject):
+        value: _ST
+
+    schema = Holder.json_schema()
+    assert schema["properties"]["value"] == {}
+
+
+@dataclass
+class WithDefaultField(Kobject):
+    required_field: str
+    optional_field: int = 0
+
+
+@dataclass
+class NestsDefault(Kobject):
+    inner: WithDefaultField
+
+
+def test_schema_default_dialect_is_2020_12():
+    schema = WithDefaultField.json_schema()
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+
+
+def test_schema_validation_mode_defaulted_field_optional():
+    schema = WithDefaultField.json_schema()  # default mode == validation
+    assert schema["required"] == ["required_field"]
+    assert "optional_field" not in schema["required"]
+
+
+def test_schema_serialization_mode_all_fields_required():
+    schema = WithDefaultField.json_schema(mode="serialization")
+    assert set(schema["required"]) == {"required_field", "optional_field"}
+    # Default value is still described.
+    assert schema["properties"]["optional_field"]["default"] == 0
+
+
+def test_schema_serialization_mode_propagates_to_nested():
+    schema = NestsDefault.json_schema(mode="serialization")
+    inner = schema["$defs"]["WithDefaultField"]
+    assert set(inner["required"]) == {"required_field", "optional_field"}
+
+
+def test_schema_invalid_mode_raises():
+    with pytest.raises(ValueError, match="validation"):
+        WithDefaultField.json_schema(mode="nonsense")
+
+
+_WT = TypeVar("_WT")
+
+
+@dataclass
+class Wrapper(Kobject, Generic[_WT]):
+    value: _WT
+    maybe: _WT | None
+    tags: list[str]
+
+
+def test_schema_generic_substitutes_union_and_concrete_fields():
+    @dataclass
+    class Holder(Kobject):
+        wrapped: Wrapper[int]
+
+    props = Holder.json_schema()["properties"]["wrapped"]["properties"]
+    # TypeVar bound to int
+    assert props["value"] == {"type": "integer"}
+    # Union carrying the TypeVar is rebuilt as int | None
+    assert props["maybe"] == {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+    # Concrete generic field (no TypeVar) is preserved untouched
+    assert props["tags"] == {"type": "array", "items": {"type": "string"}}
+
+
+def test_schema_literal_mixed_types_falls_back_to_enum_only():
+    @dataclass
+    class StubClass(Kobject):
+        mixed: Literal["a", 1]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["mixed"] == {"enum": ["a", 1]}
+
+
+def test_schema_variable_length_tuple():
+    @dataclass
+    class StubClass(Kobject):
+        items: tuple[int, ...]
+
+    schema = StubClass.json_schema()
+    assert schema["properties"]["items"] == {
+        "type": "array",
+        "items": {"type": "integer"},
+    }

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import types
 from collections.abc import Callable
 from inspect import Signature
 from typing import Any, ClassVar, TypeVar, get_type_hints
 
+import kobject._json as _json
 from kobject.fields import FieldMeta
 from kobject.schema import JSONSchemaGenerator
 from kobject.serialization import (
@@ -194,14 +194,19 @@ class Kobject:
         JSONSchemaGenerator.register_resolver(attr_type, resolver_callback)
 
     @classmethod
-    def json_schema(cls) -> dict[str, Any]:
+    def json_schema(cls, mode: str = "validation") -> dict[str, Any]:
         """
-        Generate JSON Schema Draft 7 for this class.
+        Generate a JSON Schema (Draft 2020-12) for this class.
+
+        Args:
+            mode: "validation" (default) describes what from_dict/from_json
+                accepts — defaulted fields are optional. "serialization"
+                describes what to_dict/to_json emits — every field is required.
 
         Returns:
             Complete JSON Schema dict with $schema, properties, etc.
         """
-        return JSONSchemaGenerator.generate(cls)
+        return JSONSchemaGenerator.generate(cls, mode=mode)
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__
@@ -220,7 +225,7 @@ class Kobject:
         Returns a class instance by the given JSON payload.
         """
         try:
-            dict_repr = json.loads(payload)
+            dict_repr = _json.loads(payload)
             instance = cls.from_dict(dict_repr=dict_repr)
             return instance
         except TypeError as original_error:
@@ -231,7 +236,7 @@ class Kobject:
             if hasattr(original_error, "json_error"):
                 _exception = cls._enriched_error(
                     _exception,
-                    original_error.json_error(),  # type: ignore[attr-defined]
+                    original_error.json_error(),
                 )
 
             raise _exception from None
@@ -257,14 +262,27 @@ class Kobject:
             raise _exception from original_error
 
     @classmethod
-    def from_dict(cls: type[T], dict_repr: dict[str, Any]) -> T:
+    def from_dict(
+        cls: type[T],
+        dict_repr: dict[str, Any],
+        _type_overrides: _Dict[str, Any] | None = None,
+    ) -> T:
         """
         Returns a class instance by the given dict representation.
+
+        ``_type_overrides`` maps field names to concrete annotations and is used
+        internally to deserialize parametrized generic models (e.g. ``Box[int]``)
+        by substituting their TypeVars; user code should not need to pass it.
         """
 
         _missing: list[dict[str, Any]] = []
         _dict_repr: dict[str, Any] = {}
         for field in cls._with_field_map():
+            annotation = (
+                _type_overrides.get(field.name, field.annotation)
+                if _type_overrides
+                else field.annotation
+            )
             attr_value = dict_repr.get(field.name)
             _is_missing = field.name not in dict_repr
             if _is_missing and field.have_default_value:
@@ -273,7 +291,7 @@ class Kobject:
                 _missing.append(
                     {
                         "field": field.name,
-                        "type": field.annotation,
+                        "type": annotation,
                         "value": "Empty",
                     }
                 )
@@ -283,34 +301,34 @@ class Kobject:
             if attr_value == field.default:
                 continue
 
-            base_type = JSONDecoder.get_base_type(attr_type=field.annotation)
+            base_type = JSONDecoder.get_base_type(attr_type=annotation)
 
             if base_type is type(None) and attr_value is None:
                 _dict_repr[field.name] = attr_value
 
             elif _checker(base_type, list | tuple | dict | set) is False:
                 _dict_repr[field.name] = JSONDecoder.type_caster(
-                    attr_type=field.annotation, attr_value=attr_value
+                    attr_type=annotation, attr_value=attr_value
                 )
 
             elif _checker(base_type, list) and isinstance(attr_value, list):
                 _dict_repr[field.name] = _resolve_list(
-                    _type=field.annotation, attr_value=attr_value
+                    _type=annotation, attr_value=attr_value
                 )
 
             elif _checker(base_type, tuple) and isinstance(attr_value, list):
                 _dict_repr[field.name] = _resolve_tuple(
-                    _type=field.annotation, attr_value=attr_value
+                    _type=annotation, attr_value=attr_value
                 )
 
             elif _checker(base_type, set) and isinstance(attr_value, list):
                 _dict_repr[field.name] = _resolve_set(
-                    _type=field.annotation, attr_value=attr_value
+                    _type=annotation, attr_value=attr_value
                 )
 
             elif _checker(base_type, dict) and isinstance(attr_value, dict):
                 _dict_repr[field.name] = _resolve_dict(
-                    _type=field.annotation, attr_value=attr_value
+                    _type=annotation, attr_value=attr_value
                 )
 
         if _missing:
@@ -343,10 +361,7 @@ class Kobject:
         Returns JSON bytes of your object.
         """
         dict_repr = self._dict(resolver=JSONEncoder.default, remove_nones=remove_nones)
-        json_bytes = json.dumps(
-            dict_repr, default=JSONEncoder.default, separators=(",", ":")
-        )
-        return json_bytes.encode()
+        return _json.dumps(dict_repr, default=JSONEncoder.default)
 
     def _dict(
         self, resolver: Callable[[Any], Any], remove_nones: bool = False

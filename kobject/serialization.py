@@ -9,10 +9,75 @@ from collections.abc import Callable
 from inspect import isclass
 from typing import Any, ClassVar, Union, get_args, get_origin
 
+from kobject._compat import is_literal
+
 
 def is_union(attr_type: type | type[Any]) -> bool:
     """Check if attr_type is a Union type."""
     return get_origin(attr_type) is Union or isinstance(attr_type, types.UnionType)
+
+
+# Cache of detected discriminators keyed by the union type. The result is a pure
+# function of the union members, so caching never leaks test state.
+_discriminator_cache: dict[Any, tuple[str, dict[Any, type[Any]]] | None] = {}
+
+
+def _get_union_discriminator(
+    attr_type: type[Any],
+) -> tuple[str, dict[Any, type[Any]]] | None:
+    """Detect an automatic tag discriminator for a union of Kobject subclasses.
+
+    A discriminator is a field present on every Kobject member whose annotation
+    is a typing.Literal with tag values that are unique across members. Returns
+    ``(field_name, {tag_value: member})`` or ``None`` when the union has no such
+    unambiguous tag field.
+    """
+    if attr_type in _discriminator_cache:
+        return _discriminator_cache[attr_type]
+
+    from kobject.core import Kobject
+
+    members = [m for m in get_args(attr_type) if isclass(m) and issubclass(m, Kobject)]
+    result: tuple[str, dict[Any, type[Any]]] | None = None
+    if len(members) >= 2:
+        for meta in members[0]._with_field_map():
+            if not is_literal(meta.annotation):
+                continue
+            tag_map: dict[Any, type[Any]] = {}
+            ok = True
+            for member in members:
+                field_meta = next(
+                    (f for f in member._with_field_map() if f.name == meta.name),
+                    None,
+                )
+                if field_meta is None or not is_literal(field_meta.annotation):
+                    ok = False
+                    break
+                for tag in get_args(field_meta.annotation):
+                    if tag in tag_map:  # tag reused across members -> ambiguous
+                        ok = False
+                        break
+                    tag_map[tag] = member
+                if not ok:
+                    break
+            if ok and tag_map:
+                result = (meta.name, tag_map)
+                break
+
+    _discriminator_cache[attr_type] = result
+    return result
+
+
+def _is_generic_kobject(attr_type: type[Any]) -> bool:
+    """Check if attr_type is a parametrized generic Kobject subclass (Box[int])."""
+    from kobject.core import Kobject
+
+    origin = get_origin(attr_type)
+    return (
+        isinstance(origin, type)
+        and issubclass(origin, Kobject)
+        and bool(getattr(origin, "__parameters__", ()))
+    )
 
 
 def _checker(
@@ -55,12 +120,64 @@ class JSONDecoder:
         """
         Returns the result of casting attribute value to the attribute type.
         """
+        if is_union(attr_type):
+            return cls._cast_union(attr_type, attr_value)
+        if isinstance(attr_value, dict) and _is_generic_kobject(attr_type):
+            return cls._cast_generic_kobject(attr_type, attr_value)
         for map_attr_type, resolver in cls.types_resolver:
             if _checker(attr_type, map_attr_type):
-                for _type in get_args(attr_type):
-                    if issubclass(_type, map_attr_type):
-                        return resolver(_type, attr_value)
                 return resolver(attr_type, attr_value)
+        return attr_value
+
+    @classmethod
+    def _cast_generic_kobject(cls, attr_type: type[Any], attr_value: Any) -> Any:
+        """
+        Deserialize a parametrized generic Kobject (e.g. ``Box[int]``) by binding
+        its TypeVars to the concrete arguments and delegating to ``from_dict``.
+        """
+        from kobject._compat import substitute_type_vars
+
+        origin: Any = get_origin(attr_type)
+        mapping = dict(zip(origin.__parameters__, get_args(attr_type), strict=False))
+        overrides = {
+            field.name: substitute_type_vars(field.annotation, mapping)
+            for field in origin._with_field_map()
+        }
+        return origin.from_dict(attr_value, _type_overrides=overrides)
+
+    @classmethod
+    def _cast_union(cls, attr_type: type[Any], attr_value: Any) -> Any:
+        """
+        Cast a value for a Union type.
+
+        When the union is a tagged discriminated union (every Kobject member
+        shares a Literal-typed field with unique tag values), the tag in the
+        payload authoritatively selects the member. Otherwise each member is
+        tried in declaration order and the first that successfully deserializes
+        wins; if more than one could match, the first declared one wins.
+        """
+        # Local imports to avoid circular imports (same pattern as JSONEncoder).
+        from kobject.fields import FieldMeta
+        from kobject.validation import _validate_field_value
+
+        if isinstance(attr_value, dict):
+            discriminator = _get_union_discriminator(attr_type)
+            if discriminator is not None:
+                field_name, tag_map = discriminator
+                member = tag_map.get(attr_value.get(field_name))
+                if member is not None:
+                    # Tag selects the member authoritatively: commit to it so a
+                    # malformed payload reports an error against the right type
+                    # instead of silently falling through to another member.
+                    return cls.type_caster(member, attr_value)
+
+        for member in get_args(attr_type):
+            try:
+                decoded = cls.type_caster(member, attr_value)
+            except Exception:
+                continue
+            if _validate_field_value(decoded, FieldMeta.get_generic_field_meta(member)):
+                return decoded
         return attr_value
 
 
