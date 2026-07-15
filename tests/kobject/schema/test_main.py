@@ -154,7 +154,7 @@ def basic_types_class(request):
 def test_basic_types_schema(basic_types_class):
     schema = basic_types_class.json_schema()
 
-    assert schema["$schema"] == "http://json-schema.org/draft-07/schema#"
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["type"] == "object"
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == {"a_str", "a_int", "a_float", "a_bool"}
@@ -788,3 +788,43 @@ def test_schema_bare_typevar_is_any():
 
     schema = Holder.json_schema()
     assert schema["properties"]["value"] == {}
+
+
+@dataclass
+class WithDefaultField(Kobject):
+    required_field: str
+    optional_field: int = 0
+
+
+@dataclass
+class NestsDefault(Kobject):
+    inner: WithDefaultField
+
+
+def test_schema_default_dialect_is_2020_12():
+    schema = WithDefaultField.json_schema()
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+
+
+def test_schema_validation_mode_defaulted_field_optional():
+    schema = WithDefaultField.json_schema()  # default mode == validation
+    assert schema["required"] == ["required_field"]
+    assert "optional_field" not in schema["required"]
+
+
+def test_schema_serialization_mode_all_fields_required():
+    schema = WithDefaultField.json_schema(mode="serialization")
+    assert set(schema["required"]) == {"required_field", "optional_field"}
+    # Default value is still described.
+    assert schema["properties"]["optional_field"]["default"] == 0
+
+
+def test_schema_serialization_mode_propagates_to_nested():
+    schema = NestsDefault.json_schema(mode="serialization")
+    inner = schema["$defs"]["WithDefaultField"]
+    assert set(inner["required"]) == {"required_field", "optional_field"}
+
+
+def test_schema_invalid_mode_raises():
+    with pytest.raises(ValueError, match="validation"):
+        WithDefaultField.json_schema(mode="nonsense")

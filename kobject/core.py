@@ -194,14 +194,19 @@ class Kobject:
         JSONSchemaGenerator.register_resolver(attr_type, resolver_callback)
 
     @classmethod
-    def json_schema(cls) -> dict[str, Any]:
+    def json_schema(cls, mode: str = "validation") -> dict[str, Any]:
         """
-        Generate JSON Schema Draft 7 for this class.
+        Generate a JSON Schema (Draft 2020-12) for this class.
+
+        Args:
+            mode: "validation" (default) describes what from_dict/from_json
+                accepts — defaulted fields are optional. "serialization"
+                describes what to_dict/to_json emits — every field is required.
 
         Returns:
             Complete JSON Schema dict with $schema, properties, etc.
         """
-        return JSONSchemaGenerator.generate(cls)
+        return JSONSchemaGenerator.generate(cls, mode=mode)
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__

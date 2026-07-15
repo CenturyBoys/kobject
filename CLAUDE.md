@@ -48,7 +48,7 @@ The library is organized into the following modules:
   - `_with_field_map()`: Caches and returns field metadata from `__init__` signature
   - `from_json()`/`from_dict()`: Deserialize JSON/dict to class instance
   - `to_json()`/`dict()`: Serialize instance to JSON/dict
-  - `json_schema()`: Generate JSON Schema Draft 7 for the class
+  - `json_schema(mode="validation"|"serialization")`: Generate JSON Schema (Draft 2020-12) for the class; serialization mode marks every field required
   - `set_decoder_resolver()`/`set_encoder_resolver()`/`set_schema_resolver()`: Register custom resolvers
   - `set_lazy_type_check()`, `set_validation_custom_exception()`, `set_content_check_custom_exception()`: Class-level config toggles (all mutate class state — see the resolver-state caveat below)
 
@@ -65,7 +65,7 @@ The library is organized into the following modules:
 - **`kobject/schema.py`**: JSON Schema generation containing:
   - `DocstringMeta`: Dataclass for parsed docstring metadata (title, description, field descriptions, examples)
   - `parse_docstring()`: Extracts metadata from reST-style docstrings
-  - `JSONSchemaGenerator`: Generates JSON Schema Draft 7 with support for custom type resolvers
+  - `JSONSchemaGenerator`: Generates JSON Schema (Draft 2020-12) with support for custom type resolvers and a validation/serialization `mode`
 
 ## Key Patterns
 
@@ -78,7 +78,7 @@ The library is organized into the following modules:
 - `Kobject.set_encoder_resolver(type, lambda)` for serialization
 - `Kobject.set_schema_resolver(type, lambda)` for JSON Schema generation
 
-**JSON Schema Generation**: The `json_schema()` method generates JSON Schema Draft 7 from class definitions. It extracts metadata from reST-style docstrings (`:param:`, `:example:`) and handles nested Kobjects via `$ref`/`$defs`.
+**JSON Schema Generation**: The `json_schema()` method generates JSON Schema (Draft 2020-12) from class definitions. It extracts metadata from reST-style docstrings (`:param:`, `:example:`) and handles nested Kobjects via `$ref`/`$defs`. A `mode` argument selects `"validation"` (defaulted fields optional, the default) or `"serialization"` (all fields required, mirroring `to_dict()` output).
 
 **Default Class Usage**: Must explicitly call `self.__post_init__()` at the end of `__init__`.
 

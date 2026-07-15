@@ -520,7 +520,7 @@ Response(data=Box(value="x"))                 # Raises TypeError (value must be 
 
 ### JSON Schema
 
-Kobject can generate JSON Schema Draft 7 from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
+Kobject can generate JSON Schema (Draft 2020-12) from your class definition. This is useful for API documentation, validation, and integration with tools like MCP servers.
 
 ```python
 from dataclasses import dataclass
@@ -546,7 +546,7 @@ print(json.dumps(schema, indent=2))
 ```
 ```json
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
     "name": {
@@ -568,6 +568,20 @@ print(json.dumps(schema, indent=2))
   "required": ["name", "age"],
   "examples": [{"name": "Alice", "age": 30}]
 }
+```
+
+#### Validation vs serialization schema
+
+```json_schema()``` accepts a ```mode```:
+
+- ```mode="validation"``` (default) describes what ```from_dict()```/```from_json()```
+  **accept**: fields with defaults are optional (not listed in ```required```).
+- ```mode="serialization"``` describes what ```to_dict()```/```to_json()``` **emit**:
+  every field is always present, so all fields are ```required```.
+
+```python
+User.json_schema()                      # validation: required == ["name", "age"]
+User.json_schema(mode="serialization")  # serialization: required == ["name", "age", "email"]
 ```
 
 #### Docstring Metadata
