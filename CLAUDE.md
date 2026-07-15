@@ -8,32 +8,34 @@ Kobject is a Python `__init__` type validator for classes and dataclasses. It va
 
 ## Commands
 
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management and packaging (build backend: hatchling).
+
 ```bash
-# Install dependencies
-poetry install
+# Install dependencies (creates/updates .venv from uv.lock)
+uv sync --dev
 
 # Run tests
-pytest
+uv run pytest
 
 # Run a single test file
-pytest tests/kobject/validator/test_main.py
+uv run pytest tests/kobject/validator/test_main.py
 
 # Run a specific test
-pytest tests/kobject/validator/test_main.py::test_simple_attr -v
+uv run pytest tests/kobject/validator/test_main.py::test_simple_attr -v
 
 # Lint, format, type-check (mirrors the CI `lint` job)
-ruff check .
-ruff format --check .
-mypy kobject/
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy kobject/
 
-# Run all pre-commit hooks (ruff --fix, ruff-format, pytest)
-pre-commit run --all-files
+# Run all pre-commit hooks (ruff --fix, ruff-format, mypy, pytest)
+uv run pre-commit run --all-files
 
-# Mutation testing (standalone; not part of pre-commit or CI)
-mutatest -n 100 -s kobject
+# Build sdist + wheel
+uv build
 ```
 
-CI (`.github/workflows/ci.yml`) runs the lint job (ruff check, ruff format --check, mypy) plus a test matrix across Python 3.10/3.11/3.12. `pyproject.toml` enforces strict mypy (`disallow_untyped_defs`) and a broad ruff rule set (`E,F,W,I,UP,B,C4,SIM,RUF`).
+CI (`.github/workflows/ci.yml`) installs with `astral-sh/setup-uv` + `uv sync --locked`, runs the lint job (ruff check, ruff format --check, mypy) plus a test matrix across Python 3.10–3.14 with a `--cov-fail-under=90` gate. `pyproject.toml` enforces strict mypy (`disallow_untyped_defs`, `warn_unused_ignores`) and a broad ruff rule set (`E,F,W,I,UP,B,C4,SIM,RUF`).
 
 ## Architecture
 

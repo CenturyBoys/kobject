@@ -12,60 +12,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
+          enable-cache: true
           python-version: "3.12"
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Sync (locked)
+        run: uv sync --locked --dev
 
-      - name: Install dependencies
-        run: poetry install --no-interaction
+      - name: Ruff lint
+        run: uv run ruff check .
 
-      - name: Run Ruff check
-        run: poetry run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
 
-      - name: Run Ruff format check
-        run: poetry run ruff format --check .
-
-      - name: Run MyPy
-        run: poetry run mypy kobject/
+      - name: Mypy type check
+        run: uv run mypy kobject/
 
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    permissions:
+      contents: read
+      id-token: write  # OIDC for tokenless Codecov upload
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
+          enable-cache: true
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Sync (locked)
+        run: uv sync --locked --dev
 
-      - name: Install dependencies
-        run: poetry install --no-interaction
-
-      - name: Run tests with coverage
-        run: poetry run pytest --cov=kobject --cov-report=xml --cov-report=term-missing
+      - name: Tests + coverage
+        run: uv run pytest --cov-fail-under=90
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
@@ -74,4 +61,3 @@ jobs:
           use_oidc: true
           files: ./coverage.xml
           fail_ci_if_error: false
-          verbose: true

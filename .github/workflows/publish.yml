@@ -2,8 +2,7 @@ name: Publish to PyPI
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ["v*"]
 
 jobs:
   build:
@@ -11,28 +10,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
+          enable-cache: true
           python-version: "3.12"
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      - name: Sync (locked)
+        run: uv sync --locked --dev
 
-      - name: Install dependencies
-        run: poetry install --no-interaction
+      - name: Lint + type check
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy kobject/
 
-      - name: Run tests
-        run: poetry run pytest
+      - name: Tests
+        run: uv run pytest
 
-      - name: Build package
-        run: poetry build
+      - name: Build
+        run: uv build
 
-      - name: Upload artifacts
+      - name: Smoke-test wheel
+        run: uv run --isolated --no-project --with dist/*.whl python -c "import kobject; print(kobject.__name__)"
+
+      - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -41,15 +43,18 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/kobject/
     permissions:
-      id-token: write
-
+      id-token: write  # required for Trusted Publishing (OIDC)
+      contents: read
     steps:
-      - name: Download artifacts
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
-      - name: Publish to PyPI
+      - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1

@@ -231,7 +231,7 @@ class Kobject:
             if hasattr(original_error, "json_error"):
                 _exception = cls._enriched_error(
                     _exception,
-                    original_error.json_error(),  # type: ignore[attr-defined]
+                    original_error.json_error(),
                 )
 
             raise _exception from None
