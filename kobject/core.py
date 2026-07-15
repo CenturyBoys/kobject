@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import types
 from collections.abc import Callable
 from inspect import Signature
 from typing import Any, ClassVar, TypeVar, get_type_hints
 
+import kobject._json as _json
 from kobject.fields import FieldMeta
 from kobject.schema import JSONSchemaGenerator
 from kobject.serialization import (
@@ -220,7 +220,7 @@ class Kobject:
         Returns a class instance by the given JSON payload.
         """
         try:
-            dict_repr = json.loads(payload)
+            dict_repr = _json.loads(payload)
             instance = cls.from_dict(dict_repr=dict_repr)
             return instance
         except TypeError as original_error:
@@ -356,10 +356,7 @@ class Kobject:
         Returns JSON bytes of your object.
         """
         dict_repr = self._dict(resolver=JSONEncoder.default, remove_nones=remove_nones)
-        json_bytes = json.dumps(
-            dict_repr, default=JSONEncoder.default, separators=(",", ":")
-        )
-        return json_bytes.encode()
+        return _json.dumps(dict_repr, default=JSONEncoder.default)
 
     def _dict(
         self, resolver: Callable[[Any], Any], remove_nones: bool = False

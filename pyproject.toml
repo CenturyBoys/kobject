@@ -16,6 +16,10 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+# Faster JSON encode/decode; picked up automatically when installed.
+orjson = ["orjson>=3"]
+
 [project.urls]
 homepage = "https://github.com/CenturyBoys/kobject"
 documentation = "https://github.com/CenturyBoys/kobject/blob/main/README.md"
@@ -30,6 +34,7 @@ dev = [
     "ruff>=0.11,<0.12",
     "pre-commit>=3.5",
     "hypothesis>=6.100",
+    "orjson>=3",
 ]
 docs = [
     "sphinx>=7.2",

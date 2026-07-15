@@ -56,6 +56,8 @@ The library is organized into the following modules:
 
 - **`kobject/fields.py`**: `FieldMeta` dataclass representing a class field with pre-processed metadata (name, annotation, required, default value).
 
+- **`kobject/_json.py`**: JSON backend indirection — prefers `orjson` (optional `kobject[orjson]` extra) when importable, else stdlib `json`. Exposes `dumps()`/`loads()` used by `to_json()`/`from_json()`. Both backends emit identical compact output for ASCII; orjson emits raw UTF-8 for non-ASCII where stdlib escapes.
+
 - **`kobject/serialization.py`**: `JSONEncoder`/`JSONDecoder` classes that handle custom type encoding/decoding via registered resolvers.
 
 - **`kobject/validation.py`**: Type validation logic used by `__post_init__`.

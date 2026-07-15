@@ -77,9 +77,9 @@ class BaseG(Kobject):
 def test_from_json_error_default_exception():
     with pytest.raises(JSONDecodeError) as error:
         BaseC.from_json(payload=b"{")
-    assert error.value.args == (
-        "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
-    )
+    # Message wording differs between the stdlib and orjson backends, but both
+    # are json.JSONDecodeError and point at the same location.
+    assert "line 1 column 2 (char 1)" in error.value.args[0]
 
 
 def test_from_json_error_custom_exception():

@@ -19,6 +19,20 @@ Know your object is a __init__ type validator for class and dataclass
 [![Python](https://img.shields.io/pypi/pyversions/kobject.svg)](https://pypi.org/project/kobject/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
+## Installation
+
+```bash
+pip install kobject
+```
+
+Kobject has no required dependencies. For faster JSON encoding/decoding you can
+install the optional ```orjson``` extra — when present it is used automatically by
+```to_json()```/```from_json()```; otherwise the standard library ```json``` is used.
+
+```bash
+pip install "kobject[orjson]"
+```
+
 ## Usage
 
 Kobject can be use inside default class declaration and with dataclasses. Kobject uses the ```__init__``` signature to check types.
